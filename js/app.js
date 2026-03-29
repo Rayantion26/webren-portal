@@ -46,18 +46,15 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('client-sort').addEventListener('change', applyFilters);
   document.getElementById('client-plan').addEventListener('change', recalcFee);
   initLangTagInput();
-  // Check existing session immediately (avoids stuck-on-login-page on reload)
-  sb.auth.getSession().then(async ({ data: { session } }) => {
+  // onAuthStateChange fires INITIAL_SESSION immediately on load in Supabase v2
+  // Use it as the single source of truth — no getSession() needed
+  sb.auth.onAuthStateChange(async (event, session) => {
     if (session && session.user) {
+      if (currentUser && currentUser.id === session.user.id) return; // already loaded (TOKEN_REFRESHED etc.)
       currentUser = session.user; await resolveAdmin(); showScreen('dashboard'); loadDashboard();
+    } else {
+      currentUser = null; isAdmin = false; showScreen('auth');
     }
-  });
-  sb.auth.onAuthStateChange(async (_event, session) => {
-    if (session && session.user) {
-      if (!currentUser || currentUser.id !== session.user.id) {
-        currentUser = session.user; await resolveAdmin(); showScreen('dashboard'); loadDashboard();
-      }
-    } else { currentUser = null; isAdmin = false; showScreen('auth'); }
   });
 });
 async function resolveAdmin() {
@@ -72,10 +69,11 @@ async function resolveAdmin() {
 async function handleLogin(e) {
   e.preventDefault();
   const btn = document.getElementById('btn-login');
-  btn.disabled = true; showMsg('login-error', '');
+  const origText = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Signing in\u2026'; showMsg('login-error', '');
   const { error } = await sb.auth.signInWithPassword({ email: document.getElementById('login-email').value.trim(), password: document.getElementById('login-password').value });
-  if (error) showMsg('login-error', error.message);
-  btn.disabled = false;
+  if (error) { showMsg('login-error', error.message); btn.disabled = false; btn.textContent = origText; }
+  // on success: onAuthStateChange fires and shows dashboard — button stays disabled until redirect
 }
 async function handleRegister(e) {
   e.preventDefault();
