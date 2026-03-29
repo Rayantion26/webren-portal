@@ -46,9 +46,17 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('client-sort').addEventListener('change', applyFilters);
   document.getElementById('client-plan').addEventListener('change', recalcFee);
   initLangTagInput();
-  sb.auth.onAuthStateChange(async (_event, session) => {
+  // Check existing session immediately (avoids stuck-on-login-page on reload)
+  sb.auth.getSession().then(async ({ data: { session } }) => {
     if (session && session.user) {
       currentUser = session.user; await resolveAdmin(); showScreen('dashboard'); loadDashboard();
+    }
+  });
+  sb.auth.onAuthStateChange(async (_event, session) => {
+    if (session && session.user) {
+      if (!currentUser || currentUser.id !== session.user.id) {
+        currentUser = session.user; await resolveAdmin(); showScreen('dashboard'); loadDashboard();
+      }
     } else { currentUser = null; isAdmin = false; showScreen('auth'); }
   });
 });
