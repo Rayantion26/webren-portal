@@ -68,21 +68,33 @@ async function resolveAdmin() {
 }
 async function handleLogin(e) {
   e.preventDefault();
+  const email = document.getElementById('login-email').value.trim();
+  const pass  = document.getElementById('login-password').value;
+  if (!email) { showMsg('login-error', 'Please enter your email address.'); return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showMsg('login-error', 'Please enter a valid email address.'); return; }
+  if (!pass)  { showMsg('login-error', 'Please enter your password.'); return; }
   const btn = document.getElementById('btn-login');
   const origText = btn.textContent;
   btn.disabled = true; btn.textContent = 'Signing in\u2026'; showMsg('login-error', '');
-  const { error } = await sb.auth.signInWithPassword({ email: document.getElementById('login-email').value.trim(), password: document.getElementById('login-password').value });
+  const { error } = await sb.auth.signInWithPassword({ email, password: pass });
   if (error) { showMsg('login-error', error.message); btn.disabled = false; btn.textContent = origText; }
-  // on success: onAuthStateChange fires and shows dashboard — button stays disabled until redirect
+  // on success: onAuthStateChange fires and shows dashboard
 }
 async function handleRegister(e) {
   e.preventDefault();
   const btn = document.getElementById('btn-register');
-  btn.disabled = true; showMsg('reg-error', ''); showMsg('reg-success', '');
+  showMsg('reg-error', ''); showMsg('reg-success', '');
   const name  = document.getElementById('reg-name').value.trim();
   const email = document.getElementById('reg-email').value.trim();
   const phone = document.getElementById('reg-phone').value.trim();
   const pass  = document.getElementById('reg-password').value;
+  if (!name)  { showMsg('reg-error', 'Please enter your full name.'); return; }
+  if (!email) { showMsg('reg-error', 'Please enter your email address.'); return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showMsg('reg-error', 'Please enter a valid email address.'); return; }
+  if (!phone) { showMsg('reg-error', 'Please enter your phone number.'); return; }
+  if (!/^(09\d{2}-?\d{3}-?\d{3}|0\d{1,2}-?\d{6,8})$/.test(phone)) { showMsg('reg-error', 'Please enter a valid Taiwan phone number (e.g. 0912-345-678).'); return; }
+  if (pass.length < 8) { showMsg('reg-error', 'Password must be at least 8 characters.'); return; }
+  btn.disabled = true;
   // Store pending data and show T&C modal
   _pendingRegData = { name, email, phone, pass };
   btn.disabled = false;
@@ -118,7 +130,9 @@ async function handleForgotPassword(e) {
   e.preventDefault();
   showMsg('forgot-error', ''); showMsg('forgot-success', '');
   const email = document.getElementById('forgot-email').value.trim();
-  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + '/portal/' });
+  if (!email) { showMsg('forgot-error', 'Please enter your email address.'); return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showMsg('forgot-error', 'Please enter a valid email address.'); return; }
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + '/' });
   if (error) { showMsg('forgot-error', error.message); }
   else { showMsg('forgot-success', 'Reset link sent - check your inbox.', true); }
 }
