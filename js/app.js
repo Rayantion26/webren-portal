@@ -1,4 +1,19 @@
 /* -- Config -- */
+/* -- Error sanitizer -- */
+function safeErr(error) {
+  if (!error) return 'Something went wrong. Please try again.';
+  const m = error.message || '';
+  if (m.includes('Email not allowed to register')) return 'Registration closed. Contact Aaron to join.';
+  if (m.includes('Invalid login credentials'))     return 'Incorrect email or password.';
+  if (m.includes('Email not confirmed'))           return 'Please confirm your email before signing in.';
+  if (m.includes('User already registered'))       return 'An account with this email already exists.';
+  if (m.includes('Password should be'))            return 'Password must be at least 8 characters.';
+  if (m.includes('duplicate key'))                 return 'This entry already exists.';
+  if (m.includes('rate limit') || m.includes('too many requests')) return 'Too many attempts. Please wait a moment.';
+  if (m.includes('JWT') || m.includes('token'))   return 'Session expired. Please sign in again.';
+  if (error.code === 'PGRST')                      return 'Something went wrong. Please try again.';
+  return 'Something went wrong. Please try again.';
+}
 const SUPABASE_URL  = 'https://gfcncubcurtnzupycwnf.supabase.co';
 const SUPABASE_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdmY25jdWJjdXJ0bnp1cHljd25mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMzQ4MzYsImV4cCI6MjA4OTgxMDgzNn0.Hbuo8Zl1MNjq8bUlc7Ed_HSBmGQiNHc9wDqKd4XDdOE';
 const COMMISSION    = 0.15;
@@ -77,7 +92,7 @@ async function handleLogin(e) {
   const origText = btn.textContent;
   btn.disabled = true; btn.textContent = 'Signing in\u2026'; showMsg('login-error', '');
   const { error } = await sb.auth.signInWithPassword({ email, password: pass });
-  if (error) { showMsg('login-error', error.message); btn.disabled = false; btn.textContent = origText; }
+  if (error) { showMsg('login-error', safeErr(error)); btn.disabled = false; btn.textContent = origText; }
   // on success: onAuthStateChange fires and shows dashboard
 }
 async function handleRegister(e) {
@@ -109,12 +124,7 @@ async function doSignUp() {
   btn.disabled = true;
   showMsg('reg-error', ''); showMsg('reg-success', '');
   const { error } = await sb.auth.signUp({ email, password: pass, options: { data: { full_name: name, phone } } });
-  if (error) {
-    const msg = error.message.includes('Email not allowed to register')
-      ? 'Registration closed. Contact Aaron to join.'
-      : error.message;
-    showMsg('reg-error', msg);
-  }
+  if (error) { showMsg('reg-error', safeErr(error)); }
   else {
     showMsg('reg-success', 'Account created! Please check your email to confirm.', true);
     const dlBtn = document.getElementById('btn-download-contract-reg');
@@ -133,7 +143,7 @@ async function handleForgotPassword(e) {
   if (!email) { showMsg('forgot-error', 'Please enter your email address.'); return; }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showMsg('forgot-error', 'Please enter a valid email address.'); return; }
   const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + '/' });
-  if (error) { showMsg('forgot-error', error.message); }
+  if (error) { showMsg('forgot-error', safeErr(error)); }
   else { showMsg('forgot-success', 'Reset link sent - check your inbox.', true); }
 }
 async function handleLogout() { await sb.auth.signOut(); document.getElementById('header-user').classList.add('hidden'); }
@@ -242,6 +252,7 @@ function renderInvoices(invoices) {
   tbody.querySelectorAll('.btn-pay').forEach(btn => btn.addEventListener('click', () => markInvoicePaid(btn.dataset.id)));
 }
 async function markInvoicePaid(id) {
+  if (!isAdmin) return;
   const { error } = await sb.from('invoices').update({ status: 'paid', paid_at: new Date().toISOString() }).eq('id', id);
   if (error) { showToast('Error updating invoice.'); return; }
   showToast(pt('toast_invoice', 'Invoice marked as paid!')); loadInvoices(); loadTotalEarned();
@@ -343,7 +354,7 @@ async function handleAddClient(e) {
     languages: selectedLangs.length ? selectedLangs.join(', ') : null,
     status: 'hold',
   });
-  if (error) { showMsg('add-client-error', error.message); }
+  if (error) { showMsg('add-client-error', safeErr(error)); }
   else { closeModal(); e.target.reset(); resetLangTags(); showToast(pt('toast_client', 'Client submitted for approval!')); loadClients(); }
   btn.disabled = false;
 }
@@ -399,7 +410,7 @@ async function addAllowedEmail() {
   const is_paid = document.getElementById('new-email-paid').checked;
   const is_free = document.getElementById('new-email-free').checked;
   const { error } = await sb.from('allowed_emails').insert({ email, is_paid, is_free });
-  if (error) { showToast('Error: ' + error.message); return; }
+  if (error) { showToast(safeErr(error)); return; }
   showToast(pt('toast_email_added', 'Email added!')); emailEl.value = '';
   document.getElementById('new-email-paid').checked = false;
   document.getElementById('new-email-free').checked = false;
