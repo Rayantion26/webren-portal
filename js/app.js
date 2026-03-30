@@ -19,7 +19,7 @@ const SUPABASE_URL  = 'https://gfcncubcurtnzupycwnf.supabase.co';
 const SUPABASE_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdmY25jdWJjdXJ0bnp1cHljd25mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMzQ4MzYsImV4cCI6MjA4OTgxMDgzNn0.Hbuo8Zl1MNjq8bUlc7Ed_HSBmGQiNHc9wDqKd4XDdOE';
 const COMMISSION    = 0.15;
 const { createClient } = supabase;
-const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } });
 // Warm up the Supabase connection immediately on page load so it's ready before the user clicks Sign In
 sb.from('allowed_emails').select('count', { count: 'exact', head: true }).then(() => {}).catch(() => {});
 function pt(key, fallback) {
