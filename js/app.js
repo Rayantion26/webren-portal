@@ -63,9 +63,14 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-close-modal').addEventListener('click', closeModal);
   document.getElementById('add-client-overlay').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
   document.getElementById('form-add-client').addEventListener('submit', handleAddClient);
-  document.getElementById('btn-save-codename').addEventListener('click', saveCodename);
   document.getElementById('btn-add-email').addEventListener('click', addAllowedEmail);
-  document.getElementById('btn-download-contract').addEventListener('click', () => downloadContract(agentName, new Date().toLocaleDateString('en-GB')));
+  document.getElementById('btn-edit-account').addEventListener('click', enterEditAccount);
+  document.getElementById('btn-save-account').addEventListener('click', saveAccount);
+  document.getElementById('btn-cancel-account').addEventListener('click', exitEditAccount);
+  document.getElementById('btn-toggle-bank').addEventListener('click', toggleBankNumber);
+  document.getElementById('btn-avatar').addEventListener('click', () => {
+    document.getElementById('account-section').scrollIntoView({ behavior: 'smooth' });
+  });
   document.getElementById('btn-download-contract-reg').addEventListener('click', function () { downloadContract(this.dataset.name, this.dataset.date); });
   document.getElementById('client-search').addEventListener('input', applyFilters);
   document.getElementById('client-filter-type').addEventListener('change', applyFilters);
@@ -92,7 +97,9 @@ async function resolveAdmin() {
     isAdmin = false;
     agentName = currentUser.email;
   }
-  document.getElementById('header-welcome').textContent = pt('welcome', 'Welcome, ') + agentName;
+  // Set avatar initials from full name or email
+  const initials = agentName.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase() || agentName.slice(0, 2).toUpperCase();
+  document.getElementById('header-avatar-initials').textContent = initials;
   document.getElementById('header-user').classList.remove('hidden');
   ['col-paydue', 'col-desc', 'col-approve'].forEach(id => document.getElementById(id).classList.toggle('hidden', !isAdmin));
   document.getElementById('allowed-emails-section').classList.toggle('hidden', !isAdmin);
@@ -146,6 +153,12 @@ async function doSignUp() {
   const btn = document.getElementById('btn-register');
   btn.disabled = true;
   showMsg('reg-error', ''); showMsg('reg-success', '');
+  // Pre-check whitelist
+  const { data: allowed } = await sb.from('allowed_emails').select('email').eq('email', email).maybeSingle();
+  if (!allowed) {
+    showMsg('reg-error', 'Your email is not on the access list. Please contact Aaron to get added.');
+    btn.disabled = false; return;
+  }
   const { error } = await sb.auth.signUp({ email, password: pass, options: { data: { full_name: name, phone } } });
   if (error) { showMsg('reg-error', safeErr(error)); }
   else {
@@ -481,15 +494,11 @@ async function loadAllowedEmails() {
 }
 function renderAllowedEmails(rows) {
   const tbody = document.getElementById('allowed-emails-tbody');
-  if (!rows.length) { tbody.replaceChildren(); const tr = tbody.insertRow(); const td = tr.insertCell(); td.colSpan = 5; td.className = 'empty-row'; td.textContent = pt('no_allowed', 'No emails yet.'); return; }
+  if (!rows.length) { tbody.replaceChildren(); const tr = tbody.insertRow(); const td = tr.insertCell(); td.colSpan = 4; td.className = 'empty-row'; td.textContent = pt('no_allowed', 'No emails yet.'); return; }
   const frag = document.createDocumentFragment();
   rows.forEach(r => {
     const tr = document.createElement('tr');
     const tdEmail = tr.insertCell(); tdEmail.textContent = r.email;
-    const tdPaid = tr.insertCell();
-    const cbPaid = document.createElement('input'); cbPaid.type = 'checkbox'; cbPaid.checked = !!r.is_paid; cbPaid.className = 'ae-paid';
-    cbPaid.addEventListener('change', () => toggleAEFlag(r.email, 'is_paid', cbPaid.checked));
-    tdPaid.appendChild(cbPaid);
     const tdFree = tr.insertCell();
     const cbFree = document.createElement('input'); cbFree.type = 'checkbox'; cbFree.checked = !!r.is_free; cbFree.className = 'ae-free';
     cbFree.addEventListener('change', () => toggleAEFlag(r.email, 'is_free', cbFree.checked));
@@ -507,12 +516,10 @@ async function addAllowedEmail() {
   const emailEl = document.getElementById('new-allowed-email');
   const email = emailEl.value.trim();
   if (!email) { showToast(pt('toast_enter_email', 'Enter an email address.')); return; }
-  const is_paid = document.getElementById('new-email-paid').checked;
   const is_free = document.getElementById('new-email-free').checked;
-  const { error } = await sb.from('allowed_emails').insert({ email, is_paid, is_free });
+  const { error } = await sb.from('allowed_emails').insert({ email, is_free });
   if (error) { showToast(safeErr(error)); return; }
   showToast(pt('toast_email_added', 'Email added!')); emailEl.value = '';
-  document.getElementById('new-email-paid').checked = false;
   document.getElementById('new-email-free').checked = false;
   loadAllowedEmails();
 }
@@ -563,17 +570,145 @@ document.addEventListener('portal:lang', () => {
   if (currentUser && isAdmin) loadAllowedEmails();
 });
 
+// ── Account section ───────────────────────────────────────────────────────────
+let _accountData = {}; // cached account data from DB
+let _bankVisible = false;
+
 async function loadProfile() {
-  const { data } = await sb.from('agents').select('codename').eq('id', currentUser.id).single();
-  if (data && data.codename) document.getElementById('agent-codename').value = data.codename;
+  const { data } = await sb.from('agents').select('full_name, codename, bank_name, bank_number').eq('id', currentUser.id).maybeSingle();
+  _accountData = data || {};
+  renderAccount(_accountData);
 }
-async function saveCodename() {
-  const val = document.getElementById('agent-codename').value.trim().toUpperCase();
-  if (!val) { showToast('Enter a codename first.'); return; }
+
+function renderAccount(d) {
+  // Full name
+  const fnEl = document.getElementById('acc-fullname');
+  if (fnEl) fnEl.value = d.full_name || '';
+
+  // Codename — locked once set
+  renderCodenameField(d.codename);
+
+  // Bank name
+  const bnEl = document.getElementById('acc-bank-name');
+  if (bnEl) bnEl.value = d.bank_name || '';
+
+  // Bank number — masked by default
+  const numEl = document.getElementById('acc-bank-number');
+  if (numEl) {
+    numEl.dataset.real = d.bank_number || '';
+    _bankVisible = false;
+    numEl.value = maskBankNumber(d.bank_number || '');
+  }
+}
+
+function renderCodenameField(codename) {
+  const wrap = document.getElementById('acc-codename-wrap');
+  if (!wrap) return;
+  wrap.textContent = '';
+  if (codename) {
+    // Locked — show as read-only display
+    const display = document.createElement('div');
+    display.className = 'codename-locked';
+    const code = document.createElement('span');
+    code.textContent = codename;
+    const lock = document.createElement('span');
+    lock.className = 'lock-icon';
+    lock.textContent = '🔒';
+    display.appendChild(code);
+    display.appendChild(lock);
+    wrap.appendChild(display);
+  } else {
+    // Not set — show input + set button
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:8px;';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.id = 'codename-input';
+    input.maxLength = 20;
+    input.placeholder = pt('hint_codename', 'Set your agent code…');
+    input.style.flex = '1';
+    input.style.textTransform = 'uppercase';
+    input.addEventListener('input', () => { input.value = input.value.toUpperCase(); });
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn-primary btn-sm';
+    btn.textContent = pt('btn_set_codename', 'Set Code');
+    btn.addEventListener('click', () => setCodename(input.value.trim()));
+    row.appendChild(input);
+    row.appendChild(btn);
+    wrap.appendChild(row);
+  }
+}
+
+async function setCodename(val) {
+  if (!val) return;
+  val = val.toUpperCase();
+  // Check uniqueness — query other agents with same codename
+  const { data: existing } = await sb.from('agents').select('id').eq('codename', val).neq('id', currentUser.id);
+  if (existing && existing.length > 0) {
+    showToast(pt('toast_codename_taken', 'That agent code is already taken.'));
+    return;
+  }
   const { error } = await sb.from('agents').update({ codename: val }).eq('id', currentUser.id);
-  if (error) { showToast(pt('toast_codename_error', 'Error saving agent code.')); return; }
-  document.getElementById('agent-codename').value = val;
-  showToast(pt('toast_codename_saved', 'Agent code saved!'));
+  if (error) { showToast(pt('toast_account_error', 'Error saving.')); return; }
+  _accountData.codename = val;
+  renderCodenameField(val);
+  showToast(pt('toast_account_saved', 'Account saved!'));
+}
+
+function maskBankNumber(num) {
+  if (!num) return '';
+  if (num.length <= 4) return '•'.repeat(num.length);
+  return '•'.repeat(num.length - 4) + num.slice(-4);
+}
+
+function toggleBankNumber() {
+  const el = document.getElementById('acc-bank-number');
+  if (!el) return;
+  _bankVisible = !_bankVisible;
+  el.value = _bankVisible ? el.dataset.real : maskBankNumber(el.dataset.real);
+  document.getElementById('btn-toggle-bank').title = _bankVisible ? 'Hide' : 'Show';
+}
+
+function enterEditAccount() {
+  // Unlock bank name + bank number inputs
+  document.getElementById('acc-bank-name').removeAttribute('readonly');
+  // Show real bank number for editing
+  const numEl = document.getElementById('acc-bank-number');
+  numEl.removeAttribute('readonly');
+  numEl.value = numEl.dataset.real;
+  _bankVisible = true;
+  document.getElementById('btn-toggle-bank').disabled = true;
+  // Swap buttons
+  document.getElementById('btn-edit-account').classList.add('hidden');
+  document.getElementById('btn-save-account').classList.remove('hidden');
+  document.getElementById('btn-cancel-account').classList.remove('hidden');
+}
+
+function exitEditAccount() {
+  document.getElementById('acc-bank-name').setAttribute('readonly', '');
+  const numEl = document.getElementById('acc-bank-number');
+  numEl.setAttribute('readonly', '');
+  numEl.value = maskBankNumber(numEl.dataset.real);
+  _bankVisible = false;
+  document.getElementById('btn-toggle-bank').disabled = false;
+  document.getElementById('btn-edit-account').classList.remove('hidden');
+  document.getElementById('btn-save-account').classList.add('hidden');
+  document.getElementById('btn-cancel-account').classList.add('hidden');
+  // Restore from cached data
+  renderAccount(_accountData);
+}
+
+async function saveAccount() {
+  const bankName   = document.getElementById('acc-bank-name').value.trim();
+  const bankNumber = document.getElementById('acc-bank-number').value.trim();
+  const { error } = await sb.from('agents').update({ bank_name: bankName, bank_number: bankNumber }).eq('id', currentUser.id);
+  if (error) { showToast(pt('toast_account_error', 'Error saving account.')); return; }
+  _accountData.bank_name   = bankName;
+  _accountData.bank_number = bankNumber;
+  document.getElementById('acc-bank-number').dataset.real = bankNumber;
+  exitEditAccount();
+  showToast(pt('toast_account_saved', 'Account saved!'));
 }
 function downloadContract(name, date) {
   if (typeof html2pdf === "undefined" || typeof contractHTML === "undefined") {

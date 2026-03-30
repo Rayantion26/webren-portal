@@ -31,9 +31,10 @@
           <button class="p-lang-btn" data-lang="zh-TW" aria-label="Switch to Traditional Chinese">中文</button>
         </div>
         <div id="header-user" class="header-user hidden">
-          <span id="header-welcome"></span>
-          <button type="button" id="btn-download-contract" class="btn-contract" data-i18n="btn_contract">Contract</button>
           <button type="button" id="btn-logout" class="btn-logout" data-i18n="btn_logout">Logout</button>
+          <button type="button" id="btn-avatar" class="btn-avatar" aria-label="My Account">
+            <span id="header-avatar-initials">--</span>
+          </button>
         </div>
       </div>
     </div>
@@ -233,7 +234,6 @@
         </div>
         <div class="add-email-row">
           <input type="email" id="new-allowed-email" placeholder="email@example.com" data-i18n-ph="ph_email">
-          <label class="check-label"><input type="checkbox" id="new-email-paid"> <span data-i18n="label_paid">Paid</span></label>
           <label class="check-label"><input type="checkbox" id="new-email-free"> <span data-i18n="label_free">Free</span></label>
           <button type="button" id="btn-add-email" class="btn-primary btn-sm" data-i18n="btn_add_email">+ Add</button>
         </div>
@@ -242,29 +242,65 @@
             <thead>
               <tr>
                 <th data-i18n="label_email">Email</th>
-                <th data-i18n="label_paid">Paid</th>
                 <th data-i18n="label_free">Free</th>
                 <th data-i18n="th_added">Added</th>
                 <th data-i18n="th_action">Action</th>
               </tr>
             </thead>
             <tbody id="allowed-emails-tbody">
-              <tr><td colspan="5" class="empty-row" data-i18n="loading">Loading…</td></tr>
+              <tr><td colspan="4" class="empty-row" data-i18n="loading">Loading…</td></tr>
             </tbody>
           </table>
         </div>
       </div>
 
-      <!-- My Profile (codename) -->
-      <div style="margin-top:2.5rem;" id="profile-section">
+      <!-- Account -->
+      <div style="margin-top:2.5rem;" id="account-section">
         <div class="section-row">
-          <h2 class="section-title" data-i18n="section_profile">My Profile</h2>
+          <h2 class="section-title" data-i18n="section_account">My Account</h2>
         </div>
-        <div style="display:flex;gap:8px;align-items:center;max-width:400px;">
-          <input type="text" id="agent-codename" placeholder="Set your agent code…" data-i18n-ph="ph_codename" style="flex:1;" maxlength="20">
-          <button type="button" id="btn-save-codename" class="btn-primary btn-sm" data-i18n="btn_save_codename">Save</button>
+        <div class="account-card">
+
+          <!-- Profile group -->
+          <div class="account-group">
+            <p class="account-group-title" data-i18n="account_profile">Profile</p>
+            <div class="form-group">
+              <label data-i18n="label_fullname">Full Name</label>
+              <input type="text" id="acc-fullname" readonly>
+            </div>
+            <div class="form-group">
+              <label data-i18n="label_agent_code">Agent Code</label>
+              <div id="acc-codename-wrap">
+                <!-- Filled by JS: either locked display or editable input+button -->
+              </div>
+              <p class="codename-hint" data-i18n="hint_codename">Your clients enter this code when submitting from the demo.</p>
+            </div>
+          </div>
+
+          <!-- Banking group -->
+          <div class="account-group">
+            <p class="account-group-title" data-i18n="account_banking">Banking</p>
+            <div class="form-group">
+              <label data-i18n="label_bank_name">Bank Name</label>
+              <input type="text" id="acc-bank-name" data-i18n-ph="ph_bank_name" placeholder="e.g. 台灣銀行" readonly>
+            </div>
+            <div class="form-group">
+              <label data-i18n="label_bank_number">Account Number</label>
+              <div class="bank-number-wrap">
+                <input type="text" id="acc-bank-number" data-i18n-ph="ph_bank_number" placeholder="Account number" readonly>
+                <button type="button" id="btn-toggle-bank" class="btn-eye" aria-label="Show/hide account number">&#128065;</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div class="account-actions">
+            <button type="button" id="btn-edit-account" class="btn-secondary btn-sm" data-i18n="btn_edit_account">Edit</button>
+            <button type="button" id="btn-save-account" class="btn-primary btn-sm hidden" data-i18n="btn_save_account">Save Changes</button>
+            <button type="button" id="btn-cancel-account" class="btn-secondary btn-sm hidden" data-i18n="btn_cancel_account">Cancel</button>
+          </div>
+
         </div>
-        <p style="font-size:0.8rem;color:var(--text-muted);margin-top:6px;" data-i18n="hint_codename">Your clients enter this code when submitting from the demo.</p>
       </div>
 
     </div>
@@ -403,9 +439,15 @@
         btn_confirm_lead: 'Confirm', btn_deny_lead: 'Deny',
         toast_lead_denied: 'Lead denied.', toast_lead_confirmed: 'Lead confirmed — fill in the details.',
         label_demo_data: 'Demo Config (from client)',
-        section_profile: 'My Profile', ph_codename: 'Set your agent code\u2026',
-        btn_save_codename: 'Save', hint_codename: 'Your clients enter this code when submitting from the demo.',
-        toast_codename_saved: 'Agent code saved!', toast_codename_error: 'Error saving agent code.',
+        section_account: 'My Account', account_profile: 'Profile', account_banking: 'Banking',
+        label_agent_code: 'Agent Code', hint_codename: 'Your clients enter this code when submitting from the demo.',
+        label_bank_name: 'Bank Name', label_bank_number: 'Account Number',
+        ph_bank_name: 'e.g. 台灣銀行', ph_bank_number: 'Account number',
+        btn_edit_account: 'Edit', btn_save_account: 'Save Changes', btn_cancel_account: 'Cancel',
+        toast_account_saved: 'Account saved!', toast_account_error: 'Error saving account.',
+        toast_codename_taken: 'That agent code is already taken. Please choose another.',
+        codename_locked_hint: 'Agent code is locked and cannot be changed.',
+        btn_set_codename: 'Set Code',
         status_possible_client: 'Lead', status_denied: 'Denied',
       },
       'zh-TW': {
@@ -468,9 +510,15 @@
         btn_confirm_lead: '\u78ba\u8a8d', btn_deny_lead: '\u62d2\u7d55',
         toast_lead_denied: '\u5df2\u62d2\u7d55\u6f5b\u5728\u5ba2\u6236\u3002', toast_lead_confirmed: '\u5df2\u78ba\u8a8d — \u8acb\u586b\u5beb\u8a73\u7d30\u8cc7\u6599\u3002',
         label_demo_data: '\u8a66\u7528\u8a2d\u5b9a\uff08\u5ba2\u6236\u81ea\u8a2d\uff09',
-        section_profile: '\u6211\u7684\u500b\u4eba\u8cc7\u6599', ph_codename: '\u8a2d\u5b9a\u4ee3\u7406\u4eba\u4ee3\u78bc\u2026',
-        btn_save_codename: '\u5132\u5b58', hint_codename: '\u5ba2\u6236\u5f9e\u8a66\u7528\u9801\u9762\u9001\u51fa\u6642\uff0c\u9700\u8f38\u5165\u6b64\u4ee3\u78bc\u3002',
-        toast_codename_saved: '\u4ee3\u7406\u4eba\u4ee3\u78bc\u5df2\u5132\u5b58\uff01', toast_codename_error: '\u5132\u5b58\u4ee3\u7406\u4eba\u4ee3\u78bc\u6642\u767c\u751f\u932f\u8aa4\u3002',
+        section_account: '\u6211\u7684\u5e33\u6236', account_profile: '\u500b\u4eba\u8cc7\u6599', account_banking: '\u9280\u884c\u8cc7\u8a0a',
+        label_agent_code: '\u4ee3\u7406\u4eba\u4ee3\u78bc', hint_codename: '\u5ba2\u6236\u5f9e\u8a66\u7528\u9801\u9762\u9001\u51fa\u6642\uff0c\u9700\u8f38\u5165\u6b64\u4ee3\u78bc\u3002',
+        label_bank_name: '\u9280\u884c\u540d\u7a31', label_bank_number: '\u5e33\u6236\u865f\u78bc',
+        ph_bank_name: '\u4f8b\uff1a\u53f0\u7063\u9280\u884c', ph_bank_number: '\u5e33\u6236\u865f\u78bc',
+        btn_edit_account: '\u7de8\u8f2f', btn_save_account: '\u5132\u5b58\u8b8a\u66f4', btn_cancel_account: '\u53d6\u6d88',
+        toast_account_saved: '\u5e33\u6236\u8cc7\u6599\u5df2\u5132\u5b58\uff01', toast_account_error: '\u5132\u5b58\u6642\u767c\u751f\u932f\u8aa4\u3002',
+        toast_codename_taken: '\u6b64\u4ee3\u7406\u4eba\u4ee3\u78bc\u5df2\u88ab\u4f7f\u7528\uff0c\u8acb\u9078\u64c7\u5176\u4ed6\u4ee3\u78bc\u3002',
+        codename_locked_hint: '\u4ee3\u7406\u4eba\u4ee3\u78bc\u5df2\u9396\u5b9a\uff0c\u7121\u6cd5\u4fee\u6539\u3002',
+        btn_set_codename: '\u8a2d\u5b9a\u4ee3\u78bc',
         status_possible_client: '\u6f5b\u5728\u5ba2\u6236', status_denied: '\u5df2\u62d2\u7d55',
       }
     };
