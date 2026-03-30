@@ -84,9 +84,14 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 async function resolveAdmin() {
-  const { data } = await sb.from('agents').select('is_admin, full_name').eq('id', currentUser.id).single();
-  isAdmin = !!(data && data.is_admin);
-  agentName = (data && data.full_name) || currentUser.email;
+  try {
+    const { data } = await sb.from('agents').select('is_admin, full_name').eq('id', currentUser.id).maybeSingle();
+    isAdmin = !!(data && data.is_admin);
+    agentName = (data && data.full_name) || currentUser.email;
+  } catch (e) {
+    isAdmin = false;
+    agentName = currentUser.email;
+  }
   document.getElementById('header-welcome').textContent = pt('welcome', 'Welcome, ') + agentName;
   document.getElementById('header-user').classList.remove('hidden');
   ['col-paydue', 'col-desc', 'col-approve'].forEach(id => document.getElementById(id).classList.toggle('hidden', !isAdmin));
