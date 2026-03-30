@@ -85,27 +85,40 @@ document.addEventListener('DOMContentLoaded', () => {
   sb.auth.onAuthStateChange(async (event, session) => {
     if (session && session.user) {
       if (currentUser && currentUser.id === session.user.id) return; // already loaded (TOKEN_REFRESHED etc.)
-      currentUser = session.user; showScreen('dashboard'); await resolveAdmin(); loadDashboard();
+      currentUser = session.user;
+      showScreen('dashboard');
+      document.getElementById('header-user').classList.remove('hidden');
+      await resolveAdmin();
+      loadDashboard();
     } else {
-      currentUser = null; isAdmin = false; showScreen('auth');
+      currentUser = null; isAdmin = false;
+      document.getElementById('header-user').classList.add('hidden');
+      showScreen('auth');
     }
   });
 });
 async function resolveAdmin() {
+  const user = currentUser;
+  if (!user) return;
   try {
-    const { data } = await sb.from('agents').select('is_admin, full_name').eq('id', currentUser.id).maybeSingle();
+    const { data } = await sb.from('agents').select('is_admin, full_name').eq('id', user.id).maybeSingle();
     isAdmin = !!(data && data.is_admin);
-    agentName = (data && data.full_name) || currentUser.email;
+    agentName = (data && data.full_name) || user.email;
   } catch (e) {
     isAdmin = false;
-    agentName = currentUser.email;
+    agentName = user.email;
   }
-  // Set avatar initials from full name or email
   const initials = agentName.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase() || agentName.slice(0, 2).toUpperCase();
   document.getElementById('header-avatar-initials').textContent = initials;
-  document.getElementById('header-user').classList.remove('hidden');
   ['col-paydue', 'col-desc', 'col-approve'].forEach(id => document.getElementById(id).classList.toggle('hidden', !isAdmin));
   document.getElementById('allowed-emails-section').classList.toggle('hidden', !isAdmin);
+  if (isAdmin) {
+    document.querySelector('[data-i18n="stat_monthly"]').textContent = 'Monthly Sales';
+    document.querySelector('[data-i18n="stat_yearly"]').textContent  = 'Yearly Sales';
+    document.querySelector('[data-i18n="th_commission"]').textContent = 'Monthly Fee';
+    document.querySelector('[data-i18n="total_commission"]').textContent = 'Total Monthly Sales:';
+    document.querySelector('[data-i18n="stat_earned"]').textContent  = 'Total Revenue';
+  }
 }
 async function handleLogin(e) {
   e.preventDefault();
@@ -185,7 +198,7 @@ async function handleForgotPassword(e) {
   if (error) { showMsg('forgot-error', safeErr(error)); }
   else { showMsg('forgot-success', 'Reset link sent - check your inbox.', true); }
 }
-async function handleLogout() { await sb.auth.signOut(); document.getElementById('header-user').classList.add('hidden'); }
+async function handleLogout() { await sb.auth.signOut(); }
 async function loadDashboard() {
   await Promise.all([loadClients(), loadLeads(), loadInvoices()]);
   if (isAdmin) loadAllowedEmails();
@@ -265,7 +278,7 @@ function renderClients(clients) {
   let totalComm = 0;
   const typeLabels = { store: pt('type_store', 'Store'), restaurant: pt('type_restaurant', 'Restaurant'), company: pt('type_company', 'Company') };
   const rows = clients.map(c => {
-    const fee = Number(c.monthly_fee) || 0; const comm = fee * COMMISSION;
+    const fee = Number(c.monthly_fee) || 0; const comm = isAdmin ? fee : fee * COMMISSION;
     if (c.status === 'active') totalComm += comm;
     const badge = statusBadge(c.status);
     const agentInfo = (isAdmin && c.agents) ? '<span style="font-size:0.8rem;color:var(--text-muted)">' + escHtml(c.agents.full_name) + '</span><br>' : '';
@@ -302,16 +315,17 @@ function renderClients(clients) {
 }
 function renderStats(clients) {
   const active = clients.filter(c => c.status === 'active');
-  const monthly = active.reduce((s, c) => s + Number(c.monthly_fee) * COMMISSION, 0);
+  const monthly = active.reduce((s, c) => s + Number(c.monthly_fee) * (isAdmin ? 1 : COMMISSION), 0);
   document.getElementById('stat-clients').textContent = clients.length;
   document.getElementById('stat-monthly').textContent = 'NT$' + monthly.toLocaleString();
   document.getElementById('stat-yearly').textContent  = 'NT$' + (monthly * 12).toLocaleString();
 }
 async function loadTotalEarned() {
-  let query = sb.from('invoices').select('commission_amount').eq('status', 'paid');
+  const field = isAdmin ? 'amount' : 'commission_amount';
+  let query = sb.from('invoices').select(field).eq('status', 'paid');
   if (!isAdmin) query = query.eq('agent_id', currentUser.id);
   const { data } = await query;
-  const total = (data || []).reduce((s, r) => s + Number(r.commission_amount), 0);
+  const total = (data || []).reduce((s, r) => s + Number(r[field]), 0);
   document.getElementById('stat-earned').textContent = 'NT$' + total.toLocaleString();
 }
 async function updateClientStatus(id, status) {
@@ -451,6 +465,8 @@ async function handleAddClient(e) {
   btn.disabled = true; showMsg('add-client-error', '');
   const clientData = {
     client_name: document.getElementById('client-name').value.trim(),
+    client_phone: document.getElementById('client-phone').value.trim() || null,
+    client_email: document.getElementById('client-email').value.trim() || null,
     plan: document.getElementById('client-plan').value,
     monthly_fee: Number(document.getElementById('client-fee').value),
     description: document.getElementById('client-desc').value.trim() || null,
@@ -498,6 +514,11 @@ async function handleAddClient(e) {
 function showScreen(name) {
   document.getElementById('auth-screen').classList.toggle('hidden', name !== 'auth');
   document.getElementById('dashboard-screen').classList.toggle('hidden', name !== 'dashboard');
+  if (name === 'auth') {
+    const btn = document.getElementById('btn-login');
+    btn.disabled = false;
+    btn.textContent = pt('btn_signin', 'Sign In');
+  }
 }
 function switchAuthTab(tab) {
   document.querySelectorAll('.auth-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
