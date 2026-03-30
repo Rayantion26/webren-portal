@@ -24,7 +24,7 @@
   <!-- ── Header ─────────────────────────────────────────────────────────────── -->
   <header id="portal-header">
     <div class="container header-inner">
-      <a href="../" class="logo">Web<span>人</span></a>
+      <a href="https://webren.net/" class="logo">Web<span>人</span></a>
       <div class="header-right">
         <div class="portal-lang">
           <button class="p-lang-btn active" data-lang="en" aria-label="Switch to English">EN</button>
@@ -137,8 +137,28 @@
         </div>
       </section>
 
+      <!-- Leads (possible clients from demo) -->
+      <div class="section-row" id="leads-section-header">
+        <h2 class="section-title" data-i18n="section_leads">Leads</h2>
+      </div>
+      <div class="table-wrap" id="leads-table-wrap">
+        <table class="data-table" id="leads-table">
+          <thead>
+            <tr>
+              <th data-i18n="th_name">Name</th>
+              <th data-i18n="th_type">Type</th>
+              <th data-i18n="th_submitted">Submitted</th>
+              <th data-i18n="th_actions">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="leads-tbody">
+            <tr><td colspan="4" class="empty-row" data-i18n="loading">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+
       <!-- Clients -->
-      <div class="section-row">
+      <div class="section-row" style="margin-top:2.5rem;">
         <h2 class="section-title" data-i18n="section_clients">Clients</h2>
         <button type="button" id="btn-open-add-client" class="btn-primary btn-sm" data-i18n="btn_add_client">+ Add Client</button>
       </div>
@@ -235,6 +255,18 @@
         </div>
       </div>
 
+      <!-- My Profile (codename) -->
+      <div style="margin-top:2.5rem;" id="profile-section">
+        <div class="section-row">
+          <h2 class="section-title" data-i18n="section_profile">My Profile</h2>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;max-width:400px;">
+          <input type="text" id="agent-codename" placeholder="Set your agent code…" data-i18n-ph="ph_codename" style="flex:1;" maxlength="20">
+          <button type="button" id="btn-save-codename" class="btn-primary btn-sm" data-i18n="btn_save_codename">Save</button>
+        </div>
+        <p style="font-size:0.8rem;color:var(--text-muted);margin-top:6px;" data-i18n="hint_codename">Your clients enter this code when submitting from the demo.</p>
+      </div>
+
     </div>
   </main>
 
@@ -273,12 +305,12 @@
           <div class="lang-suggestions hidden" id="lang-suggestions"></div>
         </div>
         <div class="form-group">
-          <label for="client-start" data-i18n="label_start">Start Date</label>
-          <input type="date" id="client-start">
-        </div>
-        <div class="form-group">
           <label for="client-desc"><span data-i18n="label_notes">Notes</span> <span class="label-optional" data-i18n="label_notes_opt">(optional)</span></label>
           <textarea id="client-desc" rows="2" placeholder="Restaurant name, contact, any notes…"></textarea>
+        </div>
+        <div class="form-group hidden" id="demo-data-group">
+          <label for="client-demo-data" data-i18n="label_demo_data">Demo Config (from client)</label>
+          <textarea id="client-demo-data" rows="5" readonly style="font-size:0.75rem;font-family:monospace;resize:vertical;"></textarea>
         </div>
         <div class="form-group">
           <label for="client-type" data-i18n="label_type">Website Type</label>
@@ -298,7 +330,7 @@
   <!-- ── Footer ─────────────────────────────────────────────────────────────── -->
   <footer>
     <div class="container footer-inner">
-      <a href="../" class="footer-logo">Web<span>人</span></a>
+      <a href="https://webren.net/" class="footer-logo">Web<span>人</span></a>
       <nav class="footer-links" aria-label="Legal">
         <a href="privacy.html" data-i18n="footer_privacy">Privacy Policy</a>
       </nav>
@@ -366,6 +398,15 @@
         sort_newest: 'Newest First', sort_agent: 'Agent Name', sort_type: 'Type',
         label_type: 'Website Type', th_type: 'Type',
         type_store: 'Store', type_restaurant: 'Restaurant', type_company: 'Company',
+        section_leads: 'Leads', th_submitted: 'Submitted',
+        no_leads: 'No pending leads.', err_leads: 'Error loading leads.',
+        btn_confirm_lead: 'Confirm', btn_deny_lead: 'Deny',
+        toast_lead_denied: 'Lead denied.', toast_lead_confirmed: 'Lead confirmed — fill in the details.',
+        label_demo_data: 'Demo Config (from client)',
+        section_profile: 'My Profile', ph_codename: 'Set your agent code\u2026',
+        btn_save_codename: 'Save', hint_codename: 'Your clients enter this code when submitting from the demo.',
+        toast_codename_saved: 'Agent code saved!', toast_codename_error: 'Error saving agent code.',
+        status_possible_client: 'Lead', status_denied: 'Denied',
       },
       'zh-TW': {
         tab_login: '\u767b\u5165', tab_register: '\u8a3b\u518a',
@@ -422,6 +463,15 @@
         sort_newest: '\u6700\u65b0\u512a\u5148', sort_agent: '\u4ee3\u7406\u4eba\u540d\u7a31', sort_type: '\u985e\u578b',
         label_type: '\u7db2\u7ad9\u985e\u578b', th_type: '\u985e\u578b',
         type_store: '\u5546\u5e97', type_restaurant: '\u9910\u5ef3', type_company: '\u516c\u53f8',
+        section_leads: '\u6f5b\u5728\u5ba2\u6236', th_submitted: '\u9001\u51fa\u6642\u9593',
+        no_leads: '\u76ee\u524d\u7121\u6f5b\u5728\u5ba2\u6236\u3002', err_leads: '\u8f09\u5165\u6f5b\u5728\u5ba2\u6236\u6642\u767c\u751f\u932f\u8aa4\u3002',
+        btn_confirm_lead: '\u78ba\u8a8d', btn_deny_lead: '\u62d2\u7d55',
+        toast_lead_denied: '\u5df2\u62d2\u7d55\u6f5b\u5728\u5ba2\u6236\u3002', toast_lead_confirmed: '\u5df2\u78ba\u8a8d — \u8acb\u586b\u5beb\u8a73\u7d30\u8cc7\u6599\u3002',
+        label_demo_data: '\u8a66\u7528\u8a2d\u5b9a\uff08\u5ba2\u6236\u81ea\u8a2d\uff09',
+        section_profile: '\u6211\u7684\u500b\u4eba\u8cc7\u6599', ph_codename: '\u8a2d\u5b9a\u4ee3\u7406\u4eba\u4ee3\u78bc\u2026',
+        btn_save_codename: '\u5132\u5b58', hint_codename: '\u5ba2\u6236\u5f9e\u8a66\u7528\u9801\u9762\u9001\u51fa\u6642\uff0c\u9700\u8f38\u5165\u6b64\u4ee3\u78bc\u3002',
+        toast_codename_saved: '\u4ee3\u7406\u4eba\u4ee3\u78bc\u5df2\u5132\u5b58\uff01', toast_codename_error: '\u5132\u5b58\u4ee3\u7406\u4eba\u4ee3\u78bc\u6642\u767c\u751f\u932f\u8aa4\u3002',
+        status_possible_client: '\u6f5b\u5728\u5ba2\u6236', status_denied: '\u5df2\u62d2\u7d55',
       }
     };
 

@@ -10,6 +10,7 @@ function safeErr(error) {
   if (m.includes('Password should be'))            return 'Password must be at least 8 characters.';
   if (m.includes('duplicate key'))                 return 'This entry already exists.';
   if (m.includes('rate limit') || m.includes('too many requests')) return 'Too many attempts. Please wait a moment.';
+  if (m.includes('timed out') || m.includes('timeout')) return 'Connection timed out. Please try again.';
   if (m.includes('JWT') || m.includes('token'))   return 'Session expired. Please sign in again.';
   if (error.code === 'PGRST')                      return 'Something went wrong. Please try again.';
   return 'Something went wrong. Please try again.';
@@ -19,6 +20,8 @@ const SUPABASE_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 const COMMISSION    = 0.15;
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+// Warm up the Supabase connection immediately on page load so it's ready before the user clicks Sign In
+sb.from('allowed_emails').select('count', { count: 'exact', head: true }).then(() => {}).catch(() => {});
 function pt(key, fallback) {
   const lang = localStorage.getItem('webren_lang') || 'en';
   const s = window.PORTAL_STRINGS && window.PORTAL_STRINGS[lang];
@@ -37,7 +40,14 @@ let currentUser = null;
 let isAdmin     = false;
 let agentName   = '';
 function statusBadge(status) {
-  const map = { active: ['status-active', pt('status_active', 'Active')], hold: ['status-hold', pt('status_hold', 'On Hold')], cancelled: ['status-cancelled', pt('status_cancelled', 'Cancelled')], inactive: ['status-inactive', pt('status_inactive', 'Inactive')] };
+  const map = {
+    active: ['status-active', pt('status_active', 'Active')],
+    hold: ['status-hold', pt('status_hold', 'On Hold')],
+    cancelled: ['status-cancelled', pt('status_cancelled', 'Cancelled')],
+    inactive: ['status-inactive', pt('status_inactive', 'Inactive')],
+    possible_client: ['status-lead', pt('status_possible_client', 'Lead')],
+    denied: ['status-denied', pt('status_denied', 'Denied')]
+  };
   const cfg = map[status] || ['status-hold', status || 'Unknown'];
   return '<span class="status-badge ' + cfg[0] + '">' + cfg[1] + '</span>';
 }
@@ -53,6 +63,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-close-modal').addEventListener('click', closeModal);
   document.getElementById('add-client-overlay').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
   document.getElementById('form-add-client').addEventListener('submit', handleAddClient);
+  document.getElementById('btn-save-codename').addEventListener('click', saveCodename);
   document.getElementById('btn-add-email').addEventListener('click', addAllowedEmail);
   document.getElementById('btn-download-contract').addEventListener('click', () => downloadContract(agentName, new Date().toLocaleDateString('en-GB')));
   document.getElementById('btn-download-contract-reg').addEventListener('click', function () { downloadContract(this.dataset.name, this.dataset.date); });
@@ -66,7 +77,7 @@ document.addEventListener('DOMContentLoaded', () => {
   sb.auth.onAuthStateChange(async (event, session) => {
     if (session && session.user) {
       if (currentUser && currentUser.id === session.user.id) return; // already loaded (TOKEN_REFRESHED etc.)
-      currentUser = session.user; await resolveAdmin(); showScreen('dashboard'); loadDashboard();
+      currentUser = session.user; showScreen('dashboard'); await resolveAdmin(); loadDashboard();
     } else {
       currentUser = null; isAdmin = false; showScreen('auth');
     }
@@ -91,7 +102,14 @@ async function handleLogin(e) {
   const btn = document.getElementById('btn-login');
   const origText = btn.textContent;
   btn.disabled = true; btn.textContent = 'Signing in\u2026'; showMsg('login-error', '');
-  const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+  const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 12000));
+  let error;
+  try {
+    const result = await Promise.race([sb.auth.signInWithPassword({ email, password: pass }), timeout]);
+    error = result.error;
+  } catch (e) {
+    error = { message: e.message === 'timeout' ? 'Connection timed out. Please try again.' : e.message };
+  }
   if (error) { showMsg('login-error', safeErr(error)); btn.disabled = false; btn.textContent = origText; }
   // on success: onAuthStateChange fires and shows dashboard
 }
@@ -148,20 +166,75 @@ async function handleForgotPassword(e) {
 }
 async function handleLogout() { await sb.auth.signOut(); document.getElementById('header-user').classList.add('hidden'); }
 async function loadDashboard() {
-  await Promise.all([loadClients(), loadInvoices()]);
+  await Promise.all([loadClients(), loadLeads(), loadInvoices()]);
   if (isAdmin) loadAllowedEmails();
+  loadProfile();
 }
 async function loadClients() {
   const tbody = document.getElementById('clients-tbody');
   const cols = isAdmin ? 10 : 7;
   tbody.innerHTML = '<tr><td colspan="' + cols + '" class="empty-row">' + pt('loading', 'Loading\u2026') + '</td></tr>';
-  const query = isAdmin ? sb.from('clients').select('*, agents(full_name)').order('created_at', { ascending: false }) : sb.from('clients').select('*').eq('agent_id', currentUser.id).order('created_at', { ascending: false });
+  const query = isAdmin
+    ? sb.from('clients').select('*, agents(full_name)').not('status', 'in', '("possible_client","denied")').order('created_at', { ascending: false })
+    : sb.from('clients').select('*').eq('agent_id', currentUser.id).not('status', 'in', '("possible_client","denied")').order('created_at', { ascending: false });
   const { data, error } = await query;
   if (error) { tbody.innerHTML = '<tr><td colspan="' + cols + '" class="empty-row">' + pt('err_clients', 'Error loading clients.') + '</td></tr>'; return; }
   lastClients = data || [];
   renderStats(lastClients);
   applyFilters();
   await loadTotalEarned();
+}
+let lastLeads = [];
+async function loadLeads() {
+  const tbody = document.getElementById('leads-tbody');
+  tbody.replaceChildren();
+  const tr0 = tbody.insertRow(); const td0 = tr0.insertCell(); td0.colSpan = 4; td0.className = 'empty-row'; td0.textContent = pt('loading', 'Loading\u2026');
+  const query = isAdmin
+    ? sb.from('clients').select('*, agents(full_name)').eq('status', 'possible_client').order('created_at', { ascending: false })
+    : sb.from('clients').select('*').eq('agent_id', currentUser.id).eq('status', 'possible_client').order('created_at', { ascending: false });
+  const { data, error } = await query;
+  if (error) { tbody.replaceChildren(); const tr = tbody.insertRow(); const td = tr.insertCell(); td.colSpan = 4; td.className = 'empty-row'; td.textContent = pt('err_leads', 'Error loading leads.'); return; }
+  lastLeads = data || [];
+  renderLeads(lastLeads);
+}
+function renderLeads(leads) {
+  const tbody = document.getElementById('leads-tbody');
+  if (!leads.length) { tbody.replaceChildren(); const tr = tbody.insertRow(); const td = tr.insertCell(); td.colSpan = 4; td.className = 'empty-row'; td.textContent = pt('no_leads', 'No pending leads.'); return; }
+  const typeLabels = { store: pt('type_store', 'Store'), restaurant: pt('type_restaurant', 'Restaurant'), company: pt('type_company', 'Company') };
+  const frag = document.createDocumentFragment();
+  leads.forEach(lead => {
+    const tr = document.createElement('tr');
+    const tdName = document.createElement('td');
+    if (isAdmin && lead.agents) { const s = document.createElement('span'); s.style.cssText = 'font-size:0.8rem;color:var(--text-muted)'; s.textContent = lead.agents.full_name || ''; tdName.appendChild(s); tdName.appendChild(document.createElement('br')); }
+    tdName.appendChild(document.createTextNode(lead.client_name || ''));
+    const tdType = document.createElement('td'); tdType.textContent = typeLabels[lead.type] || lead.type || '\u2014';
+    const tdDate = document.createElement('td'); tdDate.textContent = lead.created_at ? new Date(lead.created_at).toLocaleDateString() : '\u2014';
+    const tdAct = document.createElement('td');
+    const cb = document.createElement('button'); cb.type = 'button'; cb.className = 'btn-primary btn-sm'; cb.textContent = pt('btn_confirm_lead', 'Confirm'); cb.addEventListener('click', () => confirmLead(lead.id));
+    const db = document.createElement('button'); db.type = 'button'; db.className = 'btn-deny'; db.style.marginLeft = '4px'; db.textContent = pt('btn_deny_lead', 'Deny'); db.addEventListener('click', () => denyLead(lead.id));
+    tdAct.appendChild(cb); tdAct.appendChild(db);
+    tr.appendChild(tdName); tr.appendChild(tdType); tr.appendChild(tdDate); tr.appendChild(tdAct);
+    frag.appendChild(tr);
+  });
+  tbody.replaceChildren(frag);
+}
+function confirmLead(id) {
+  const lead = lastLeads.find(l => l.id === id);
+  if (!lead) return;
+  document.getElementById('client-name').value = lead.client_name || '';
+  document.getElementById('client-type').value = lead.type || 'store';
+  const demoGroup = document.getElementById('demo-data-group');
+  const demoArea = document.getElementById('client-demo-data');
+  if (lead.demo_data) { demoArea.value = JSON.stringify(lead.demo_data, null, 2); demoGroup.classList.remove('hidden'); }
+  else { demoArea.value = ''; demoGroup.classList.add('hidden'); }
+  document.getElementById('form-add-client').dataset.leadId = id;
+  openModal();
+  showToast(pt('toast_lead_confirmed', 'Lead confirmed \u2014 fill in the details.'));
+}
+async function denyLead(id) {
+  const { error } = await sb.from('clients').update({ status: 'denied' }).eq('id', id);
+  if (error) { showToast('Error denying lead.'); return; }
+  showToast(pt('toast_lead_denied', 'Lead denied.')); loadLeads();
 }
 function renderClients(clients) {
   const tbody = document.getElementById('clients-tbody');
@@ -220,7 +293,9 @@ async function loadTotalEarned() {
   document.getElementById('stat-earned').textContent = 'NT$' + total.toLocaleString();
 }
 async function updateClientStatus(id, status) {
-  const { error } = await sb.from('clients').update({ status }).eq('id', id);
+  const update = { status };
+  if (status === 'active') update.start_date = new Date().toISOString().split('T')[0];
+  const { error } = await sb.from('clients').update(update).eq('id', id);
   if (error) { showToast('Error updating status.'); loadClients(); return; }
   showToast(pt('toast_status', 'Status updated!')); renderStats([]); loadClients();
 }
@@ -339,23 +414,27 @@ async function handleAddClient(e) {
   e.preventDefault();
   const btn = document.getElementById('btn-submit-client');
   btn.disabled = true; showMsg('add-client-error', '');
-  const startVal = document.getElementById('client-start').value;
-  let payDeadline = null;
-  if (startVal) { const d = new Date(startVal); d.setDate(d.getDate() + 7); payDeadline = d.toISOString().split('T')[0]; }
-  const { error } = await sb.from('clients').insert({
-    agent_id: currentUser.id,
+  const clientData = {
     client_name: document.getElementById('client-name').value.trim(),
     plan: document.getElementById('client-plan').value,
     monthly_fee: Number(document.getElementById('client-fee').value),
-    start_date: startVal || null,
-    payment_deadline: payDeadline,
     description: document.getElementById('client-desc').value.trim() || null,
     type: document.getElementById('client-type').value,
     languages: selectedLangs.length ? selectedLangs.join(', ') : null,
     status: 'hold',
-  });
+  };
+  const leadId = e.target.dataset.leadId;
+  let error;
+  if (leadId) {
+    // Confirming a lead: update the existing record
+    ({ error } = await sb.from('clients').update(clientData).eq('id', leadId));
+    delete e.target.dataset.leadId;
+  } else {
+    // Manual add: insert new record
+    ({ error } = await sb.from('clients').insert({ ...clientData, agent_id: currentUser.id }));
+  }
   if (error) { showMsg('add-client-error', safeErr(error)); }
-  else { closeModal(); e.target.reset(); resetLangTags(); showToast(pt('toast_client', 'Client submitted for approval!')); loadClients(); }
+  else { closeModal(); e.target.reset(); resetLangTags(); showToast(pt('toast_client', 'Client submitted for approval!')); loadClients(); loadLeads(); }
   btn.disabled = false;
 }
 function showScreen(name) {
@@ -371,7 +450,13 @@ function showAuthForm(name) {
   if (name === 'login' || name === 'register') switchAuthTab(name);
 }
 function openModal()  { document.getElementById('add-client-overlay').classList.remove('hidden'); }
-function closeModal() { document.getElementById('add-client-overlay').classList.add('hidden'); resetLangTags(); }
+function closeModal() {
+  document.getElementById('add-client-overlay').classList.add('hidden');
+  resetLangTags();
+  delete document.getElementById('form-add-client').dataset.leadId;
+  document.getElementById('demo-data-group').classList.add('hidden');
+  document.getElementById('client-demo-data').value = '';
+}
 function showMsg(id, msg, success) {
   const el = document.getElementById(id); if (!el) return;
   el.textContent = msg; el.classList.toggle('hidden', !msg); el.classList.toggle('success', !!success);
@@ -391,17 +476,27 @@ async function loadAllowedEmails() {
 }
 function renderAllowedEmails(rows) {
   const tbody = document.getElementById('allowed-emails-tbody');
-  if (!rows.length) { tbody.innerHTML = '<tr><td colspan="5" class="empty-row">' + pt('no_allowed', 'No emails yet.') + '</td></tr>'; return; }
-  tbody.innerHTML = rows.map(r => {
-    const added = r.created_at ? new Date(r.created_at).toLocaleDateString() : '—';
-    const paidChk = '<input type="checkbox" class="ae-paid" data-id="' + r.id + '"' + (r.is_paid ? ' checked' : '') + '>';
-    const freeChk = '<input type="checkbox" class="ae-free" data-id="' + r.id + '"' + (r.is_free ? ' checked' : '') + '>';
-    const del = '<button class="btn-remove-email" data-id="' + r.id + '">' + pt('btn_remove', 'Remove') + '</button>';
-    return '<tr><td>' + escHtml(r.email) + '</td><td>' + paidChk + '</td><td>' + freeChk + '</td><td>' + added + '</td><td>' + del + '</td></tr>';
-  }).join('');
-  tbody.querySelectorAll('.ae-paid').forEach(cb => cb.addEventListener('change', () => toggleAEFlag(cb.dataset.id, 'is_paid', cb.checked)));
-  tbody.querySelectorAll('.ae-free').forEach(cb => cb.addEventListener('change', () => toggleAEFlag(cb.dataset.id, 'is_free', cb.checked)));
-  tbody.querySelectorAll('.btn-remove-email').forEach(btn => btn.addEventListener('click', () => removeAllowedEmail(btn.dataset.id)));
+  if (!rows.length) { tbody.replaceChildren(); const tr = tbody.insertRow(); const td = tr.insertCell(); td.colSpan = 5; td.className = 'empty-row'; td.textContent = pt('no_allowed', 'No emails yet.'); return; }
+  const frag = document.createDocumentFragment();
+  rows.forEach(r => {
+    const tr = document.createElement('tr');
+    const tdEmail = tr.insertCell(); tdEmail.textContent = r.email;
+    const tdPaid = tr.insertCell();
+    const cbPaid = document.createElement('input'); cbPaid.type = 'checkbox'; cbPaid.checked = !!r.is_paid; cbPaid.className = 'ae-paid';
+    cbPaid.addEventListener('change', () => toggleAEFlag(r.email, 'is_paid', cbPaid.checked));
+    tdPaid.appendChild(cbPaid);
+    const tdFree = tr.insertCell();
+    const cbFree = document.createElement('input'); cbFree.type = 'checkbox'; cbFree.checked = !!r.is_free; cbFree.className = 'ae-free';
+    cbFree.addEventListener('change', () => toggleAEFlag(r.email, 'is_free', cbFree.checked));
+    tdFree.appendChild(cbFree);
+    const tdAdded = tr.insertCell(); tdAdded.textContent = r.created_at ? new Date(r.created_at).toLocaleDateString() : '\u2014';
+    const tdAct = tr.insertCell();
+    const delBtn = document.createElement('button'); delBtn.className = 'btn-remove-email'; delBtn.textContent = pt('btn_remove', 'Remove');
+    delBtn.addEventListener('click', () => removeAllowedEmail(r.email));
+    tdAct.appendChild(delBtn);
+    frag.appendChild(tr);
+  });
+  tbody.replaceChildren(frag);
 }
 async function addAllowedEmail() {
   const emailEl = document.getElementById('new-allowed-email');
@@ -416,15 +511,14 @@ async function addAllowedEmail() {
   document.getElementById('new-email-free').checked = false;
   loadAllowedEmails();
 }
-async function removeAllowedEmail(id) {
-  const { error } = await sb.from('allowed_emails').delete().eq('id', id);
+async function removeAllowedEmail(email) {
+  const { error } = await sb.from('allowed_emails').delete().eq('email', email);
   if (error) { showToast('Error removing email.'); return; }
   showToast(pt('toast_email_removed', 'Email removed.')); loadAllowedEmails();
 }
-async function toggleAEFlag(id, field, val) {
-  const upd = {};
-  upd[field] = val;
-  const { error } = await sb.from('allowed_emails').update(upd).eq('id', id);
+async function toggleAEFlag(email, field, val) {
+  const upd = {}; upd[field] = val;
+  const { error } = await sb.from('allowed_emails').update(upd).eq('email', email);
   if (error) showToast('Error updating.');
 }
 
@@ -464,6 +558,18 @@ document.addEventListener('portal:lang', () => {
   if (currentUser && isAdmin) loadAllowedEmails();
 });
 
+async function loadProfile() {
+  const { data } = await sb.from('agents').select('codename').eq('id', currentUser.id).single();
+  if (data && data.codename) document.getElementById('agent-codename').value = data.codename;
+}
+async function saveCodename() {
+  const val = document.getElementById('agent-codename').value.trim().toUpperCase();
+  if (!val) { showToast('Enter a codename first.'); return; }
+  const { error } = await sb.from('agents').update({ codename: val }).eq('id', currentUser.id);
+  if (error) { showToast(pt('toast_codename_error', 'Error saving agent code.')); return; }
+  document.getElementById('agent-codename').value = val;
+  showToast(pt('toast_codename_saved', 'Agent code saved!'));
+}
 function downloadContract(name, date) {
   if (typeof html2pdf === "undefined" || typeof contractHTML === "undefined") {
     showToast('PDF library not loaded. Try again in a moment.'); return;

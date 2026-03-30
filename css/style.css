@@ -439,6 +439,8 @@ input, select, textarea, button { font-family: inherit; font-size: inherit; }
 .status-hold      { background: rgba(239,68,68,0.1);   color: #FCA5A5;           border: 1px solid rgba(239,68,68,0.22); }
 .status-cancelled { background: rgba(148,163,184,0.1); color: #94A3B8;           border: 1px solid rgba(148,163,184,0.2); }
 .status-inactive  { background: rgba(148,163,184,0.1); color: #94A3B8;           border: 1px solid rgba(148,163,184,0.2); }
+.status-lead      { background: rgba(250,204,21,0.1);  color: #FDE68A;           border: 1px solid rgba(250,204,21,0.25); }
+.status-denied    { background: rgba(148,163,184,0.08); color: #64748B;          border: 1px solid rgba(148,163,184,0.15); }
 
 /* Admin table controls */
 .status-select {
@@ -529,6 +531,13 @@ input, select, textarea, button { font-family: inherit; font-size: inherit; }
   font-size: 0.88rem; color: var(--text-2); cursor: pointer;
 }
 .check-label input[type="checkbox"] { cursor: pointer; accent-color: var(--teal); }
+.btn-deny {
+  background: rgba(239,68,68,0.08); color: #F87171;
+  border: 1px solid rgba(239,68,68,0.2); border-radius: 8px;
+  padding: 0.42rem 0.9rem; font-size: 0.875rem; cursor: pointer; font-family: inherit;
+  transition: background var(--transition);
+}
+.btn-deny:hover { background: rgba(239,68,68,0.18); }
 .btn-remove-email {
   background: rgba(239,68,68,0.08); color: #F87171;
   border: 1px solid rgba(239,68,68,0.2); border-radius: 7px;
