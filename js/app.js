@@ -19,7 +19,7 @@ const SUPABASE_URL  = 'https://gfcncubcurtnzupycwnf.supabase.co';
 const SUPABASE_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdmY25jdWJjdXJ0bnp1cHljd25mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMzQ4MzYsImV4cCI6MjA4OTgxMDgzNn0.Hbuo8Zl1MNjq8bUlc7Ed_HSBmGQiNHc9wDqKd4XDdOE';
 const COMMISSION    = 0.15;
 const { createClient } = supabase;
-const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } });
+const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { storage: window.sessionStorage, persistSession: true } });
 // Warm up the Supabase connection immediately on page load so it's ready before the user clicks Sign In
 sb.from('allowed_emails').select('count', { count: 'exact', head: true }).then(() => {}).catch(() => {});
 function pt(key, fallback) {
@@ -71,12 +71,8 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.setAttribute('aria-expanded', !open);
     body.classList.toggle('hidden', open);
   });
-  document.getElementById('btn-edit-account').addEventListener('click', enterEditAccount);
-  document.getElementById('btn-save-account').addEventListener('click', saveAccount);
-  document.getElementById('btn-cancel-account').addEventListener('click', exitEditAccount);
-  document.getElementById('btn-toggle-bank').addEventListener('click', toggleBankNumber);
   document.getElementById('btn-avatar').addEventListener('click', () => {
-    document.getElementById('account-section').scrollIntoView({ behavior: 'smooth' });
+    window.location.href = 'account.html';
   });
   document.getElementById('btn-download-contract-reg').addEventListener('click', function () { downloadContract(this.dataset.name, this.dataset.date); });
   document.getElementById('client-search').addEventListener('input', applyFilters);
@@ -193,7 +189,6 @@ async function handleLogout() { await sb.auth.signOut(); document.getElementById
 async function loadDashboard() {
   await Promise.all([loadClients(), loadLeads(), loadInvoices()]);
   if (isAdmin) loadAllowedEmails();
-  loadProfile();
 }
 async function loadClients() {
   const tbody = document.getElementById('clients-tbody');

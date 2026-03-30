@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Account — Web人 Portal</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .header-right { margin-left:auto; display:flex; align-items:center; gap:12px; }
+    body.lang-zh { font-family: 'Noto Sans TC', 'Space Grotesk', system-ui, sans-serif; }
+    .page-wrap { max-width: 620px; margin: 0 auto; padding: 2rem 1.25rem 4rem; width: 100%; }
+    .back-link {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      font-size: 0.875rem; color: var(--text-2); text-decoration: none;
+      margin-bottom: 1.75rem; transition: color var(--transition);
+    }
+    .back-link:hover { color: var(--teal); }
+    .page-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 1.75rem; }
+    /* Withdrawal balance card */
+    .withdraw-balance {
+      background: linear-gradient(135deg, var(--teal-glow), transparent);
+      border: 1px solid var(--teal);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+      flex-wrap: wrap; margin-bottom: 0.75rem;
+    }
+    .withdraw-balance-label { font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); margin-bottom: 0.3rem; }
+    .withdraw-balance-amount { font-size: 2rem; font-weight: 700; color: var(--teal-light); }
+    .btn-withdraw {
+      background: var(--teal); color: #fff; border: none;
+      padding: 0.7rem 1.5rem; border-radius: 8px; font-size: 0.9rem; font-weight: 600;
+      cursor: pointer; font-family: inherit; transition: all var(--transition); white-space: nowrap;
+    }
+    .btn-withdraw:hover:not(:disabled) { background: var(--teal-light); transform: translateY(-1px); }
+    .btn-withdraw:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+    .withdraw-min-note { font-size: 0.78rem; color: var(--text-muted); }
+    /* Withdrawal history */
+    .withdraw-history { margin-top: 0.5rem; }
+    .withdraw-status-pending { color: #F59E0B; font-weight: 600; }
+    .withdraw-status-paid    { color: var(--green); font-weight: 600; }
+    .withdraw-status-rejected { color: var(--red); font-weight: 600; }
+  </style>
+</head>
+<body>
+
+  <!-- ── Header ────────────────────────────────────────────────────────────────── -->
+  <header id="portal-header">
+    <div class="container header-inner">
+      <a href="https://webren.net/" class="logo">Web<span>人</span></a>
+      <div class="header-right">
+        <div id="header-user" class="header-user hidden">
+          <button type="button" id="btn-logout" class="btn-logout">Logout</button>
+          <button type="button" id="btn-avatar" class="btn-avatar" aria-label="My Account">
+            <span id="header-avatar-initials">--</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Account Page ──────────────────────────────────────────────────────────── -->
+  <div class="page-wrap" id="account-wrap" style="display:none">
+
+    <a href="index.html" class="back-link">← Back to Dashboard</a>
+    <h1 class="page-title">My Account</h1>
+
+    <div class="account-card" style="margin-bottom:1.5rem;">
+
+      <!-- Profile group -->
+      <div class="account-group">
+        <p class="account-group-title">Profile</p>
+        <div class="form-group">
+          <label>Full Name</label>
+          <input type="text" id="acc-fullname" readonly>
+        </div>
+        <div class="form-group">
+          <label>Agent Code</label>
+          <div id="acc-codename-wrap"></div>
+          <p class="codename-hint">Your clients enter this code when submitting from the demo.</p>
+        </div>
+      </div>
+
+      <!-- Banking group -->
+      <div class="account-group">
+        <p class="account-group-title">Banking</p>
+        <div class="form-group">
+          <label>Bank Name</label>
+          <input type="text" id="acc-bank-name" placeholder="e.g. 台灣銀行" readonly>
+        </div>
+        <div class="form-group">
+          <label>Account Number</label>
+          <div class="bank-number-wrap">
+            <input type="text" id="acc-bank-number" placeholder="Account number" readonly>
+            <button type="button" id="btn-toggle-bank" class="btn-eye" aria-label="Show/hide">&#128065;</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="account-actions">
+        <button type="button" id="btn-edit-account" class="btn-secondary btn-sm">Edit</button>
+        <button type="button" id="btn-save-account" class="btn-primary btn-sm hidden">Save Changes</button>
+        <button type="button" id="btn-cancel-account" class="btn-secondary btn-sm hidden">Cancel</button>
+      </div>
+
+    </div>
+
+    <!-- ── Withdrawal ────────────────────────────────────────────────────────── -->
+    <div class="section-row" style="margin-bottom:1rem;">
+      <h2 class="section-title">Withdrawal</h2>
+    </div>
+
+    <div class="withdraw-balance">
+      <div>
+        <div class="withdraw-balance-label">Available to Withdraw</div>
+        <div class="withdraw-balance-amount" id="withdraw-available">NT$0</div>
+        <div class="withdraw-min-note">Minimum withdrawal: NT$1,000</div>
+      </div>
+      <button type="button" id="btn-withdraw" class="btn-withdraw" disabled>Request Withdrawal</button>
+    </div>
+
+    <div class="withdraw-history">
+      <div class="section-row" style="margin:1rem 0 0.5rem;">
+        <h3 style="font-size:0.85rem;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--text-muted);">Withdrawal History</h3>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Amount</th>
+              <th>Status</th>
+              <th>Paid On</th>
+            </tr>
+          </thead>
+          <tbody id="withdraw-tbody">
+            <tr><td colspan="4" class="empty-row">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="js/account.js"></script>
+</body>
+</html>
