@@ -64,6 +64,13 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('add-client-overlay').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
   document.getElementById('form-add-client').addEventListener('submit', handleAddClient);
   document.getElementById('btn-add-email').addEventListener('click', addAllowedEmail);
+  document.getElementById('btn-custom-toggle').addEventListener('click', () => {
+    const btn = document.getElementById('btn-custom-toggle');
+    const body = document.getElementById('custom-body');
+    const open = btn.getAttribute('aria-expanded') === 'true';
+    btn.setAttribute('aria-expanded', !open);
+    body.classList.toggle('hidden', open);
+  });
   document.getElementById('btn-edit-account').addEventListener('click', enterEditAccount);
   document.getElementById('btn-save-account').addEventListener('click', saveAccount);
   document.getElementById('btn-cancel-account').addEventListener('click', exitEditAccount);
@@ -246,6 +253,8 @@ function confirmLead(id) {
   if (lead.demo_data) { demoArea.value = JSON.stringify(lead.demo_data, null, 2); demoGroup.classList.remove('hidden'); }
   else { demoArea.value = ''; demoGroup.classList.add('hidden'); }
   document.getElementById('form-add-client').dataset.leadId = id;
+  // Hide customization section for lead confirmations — client already chose their config
+  document.getElementById('custom-section').classList.add('hidden');
   openModal();
   showToast(pt('toast_lead_confirmed', 'Lead confirmed \u2014 fill in the details.'));
 }
@@ -428,6 +437,19 @@ function resetLangTags() {
   document.getElementById('lang-suggestions').classList.add('hidden');
 }
 
+const PORTAL_PRESET_THEMES = {
+  ivory:    { primary: '#0D9488', accent: '#7C3AED', bg: '#FAFAFA',  text: '#111827' },
+  midnight: { primary: '#38BDF8', accent: '#818CF8', bg: '#0D1117',  text: '#F9FAFB' },
+  ocean:    { primary: '#06B6D4', accent: '#38BDF8', bg: '#0F1F3D',  text: '#E0F2FE' },
+  forest:   { primary: '#10B981', accent: '#FCD34D', bg: '#0F2318',  text: '#D1FAE5' },
+  sunset:   { primary: '#F97316', accent: '#EF4444', bg: '#1C0A00',  text: '#FEF3C7' },
+  rose:     { primary: '#EC4899', accent: '#8B5CF6', bg: '#FFF1F5',  text: '#1F0010' },
+  arctic:   { primary: '#0284C7', accent: '#6366F1', bg: '#F0F9FF',  text: '#0C4A6E' },
+  obsidian: { primary: '#A1A1AA', accent: '#71717A', bg: '#09090B',  text: '#FAFAFA'  },
+  amethyst: { primary: '#A855F7', accent: '#EC4899', bg: '#1A0A2E',  text: '#EDE9FE' },
+  marigold: { primary: '#D97706', accent: '#EF4444', bg: '#FFFBEB',  text: '#422006' },
+};
+
 async function handleAddClient(e) {
   e.preventDefault();
   const btn = document.getElementById('btn-submit-client');
@@ -444,15 +466,38 @@ async function handleAddClient(e) {
   const leadId = e.target.dataset.leadId;
   let error;
   if (leadId) {
-    // Confirming a lead: update the existing record
+    // Confirming a lead: update existing record, preserve existing demo_data
     ({ error } = await sb.from('clients').update(clientData).eq('id', leadId));
     delete e.target.dataset.leadId;
   } else {
-    // Manual add: insert new record
+    // Manual add: include agent customization preferences in demo_data
+    const presetId = document.getElementById('client-preset').value;
+    const bgStyle  = document.getElementById('client-bg-style').value;
+    const headFont = document.getElementById('client-heading-font').value;
+    const bodyFont = document.getElementById('client-body-font').value;
+    const hasCustom = presetId || bgStyle || headFont || bodyFont;
+    if (hasCustom) {
+      const theme = PORTAL_PRESET_THEMES[presetId] || null;
+      clientData.demo_data = {
+        config: {
+          mode: clientData.type,
+          theme: theme || null,
+          preset: presetId || null,
+          fonts: { heading: headFont || null, body: bodyFont || null },
+          bgStyle: bgStyle || null,
+        }
+      };
+    }
     ({ error } = await sb.from('clients').insert({ ...clientData, agent_id: currentUser.id }));
   }
   if (error) { showMsg('add-client-error', safeErr(error)); }
-  else { closeModal(); e.target.reset(); resetLangTags(); showToast(pt('toast_client', 'Client submitted for approval!')); loadClients(); loadLeads(); }
+  else {
+    closeModal(); e.target.reset(); resetLangTags();
+    // Reset customization section
+    document.getElementById('btn-custom-toggle').setAttribute('aria-expanded', 'false');
+    document.getElementById('custom-body').classList.add('hidden');
+    showToast(pt('toast_client', 'Client submitted for approval!')); loadClients(); loadLeads();
+  }
   btn.disabled = false;
 }
 function showScreen(name) {
@@ -467,7 +512,10 @@ function showAuthForm(name) {
   ['login', 'register', 'forgot'].forEach(f => document.getElementById('form-' + f).classList.toggle('hidden', f !== name));
   if (name === 'login' || name === 'register') switchAuthTab(name);
 }
-function openModal()  { document.getElementById('add-client-overlay').classList.remove('hidden'); }
+function openModal()  {
+  document.getElementById('custom-section').classList.remove('hidden');
+  document.getElementById('add-client-overlay').classList.remove('hidden');
+}
 function closeModal() {
   document.getElementById('add-client-overlay').classList.add('hidden');
   resetLangTags();

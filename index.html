@@ -356,6 +356,80 @@
             <option value="company" data-i18n="type_company">Company</option>
           </select>
         </div>
+
+        <!-- Customization (collapsible) -->
+        <div class="custom-section" id="custom-section">
+          <button type="button" class="custom-toggle" id="btn-custom-toggle" aria-expanded="false">
+            <span data-i18n="label_customization">Customization</span>
+            <span class="custom-toggle-hint" data-i18n="customization_optional">(optional)</span>
+            <span class="custom-chevron">▾</span>
+          </button>
+          <div class="custom-body hidden" id="custom-body">
+            <div class="form-group">
+              <label data-i18n="label_preset">Theme Preset</label>
+              <select id="client-preset">
+                <option value="" data-i18n="preset_none">— No preference —</option>
+                <option value="ivory">Ivory</option>
+                <option value="midnight">Midnight</option>
+                <option value="ocean">Ocean</option>
+                <option value="forest">Forest</option>
+                <option value="sunset">Sunset</option>
+                <option value="rose">Rose</option>
+                <option value="arctic">Arctic</option>
+                <option value="obsidian">Obsidian</option>
+                <option value="amethyst">Amethyst</option>
+                <option value="marigold">Marigold</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label data-i18n="label_bg_style">Background Style</label>
+              <select id="client-bg-style">
+                <option value="" data-i18n="preset_none">— No preference —</option>
+                <option value="particles">Particles</option>
+                <option value="waves">Waves</option>
+                <option value="grid">Grid</option>
+                <option value="blobs">Blobs</option>
+                <option value="stars">Stars</option>
+                <option value="geometric">Geometric</option>
+                <option value="ripple">Ripple</option>
+                <option value="fireflies">Fireflies</option>
+                <option value="aurora">Aurora</option>
+                <option value="none">None</option>
+              </select>
+            </div>
+            <div class="custom-font-row">
+              <div class="form-group">
+                <label data-i18n="label_heading_font">Heading Font</label>
+                <select id="client-heading-font">
+                  <option value="">— No preference —</option>
+                  <option>Inter</option><option>DM Sans</option><option>Plus Jakarta Sans</option>
+                  <option>Nunito</option><option>Poppins</option><option>Lato</option>
+                  <option>Open Sans</option><option>Raleway</option><option>Work Sans</option>
+                  <option>Quicksand</option><option>Playfair Display</option><option>Lora</option>
+                  <option>Merriweather</option><option>Cormorant Garamond</option>
+                  <option>EB Garamond</option><option>Libre Baskerville</option>
+                  <option>Crimson Text</option><option>Source Serif 4</option>
+                  <option>Josefin Sans</option><option>Montserrat</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label data-i18n="label_body_font">Body Font</label>
+                <select id="client-body-font">
+                  <option value="">— No preference —</option>
+                  <option>Inter</option><option>DM Sans</option><option>Plus Jakarta Sans</option>
+                  <option>Nunito</option><option>Poppins</option><option>Lato</option>
+                  <option>Open Sans</option><option>Raleway</option><option>Work Sans</option>
+                  <option>Quicksand</option><option>Playfair Display</option><option>Lora</option>
+                  <option>Merriweather</option><option>Cormorant Garamond</option>
+                  <option>EB Garamond</option><option>Libre Baskerville</option>
+                  <option>Crimson Text</option><option>Source Serif 4</option>
+                  <option>Josefin Sans</option><option>Montserrat</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="form-message hidden" id="add-client-error" role="alert"></div>
         <div class="modal-note" data-i18n="modal_note">Status will default to <span class="status-badge status-hold">On Hold</span> until Aaron approves.</div>
         <button type="submit" class="btn-primary btn-full" id="btn-submit-client" data-i18n="btn_submit_client">Submit for Approval</button>
@@ -439,6 +513,9 @@
         btn_confirm_lead: 'Confirm', btn_deny_lead: 'Deny',
         toast_lead_denied: 'Lead denied.', toast_lead_confirmed: 'Lead confirmed — fill in the details.',
         label_demo_data: 'Demo Config (from client)',
+        label_customization: 'Customization', customization_optional: '(optional)',
+        label_preset: 'Theme Preset', label_bg_style: 'Background Style',
+        label_heading_font: 'Heading Font', label_body_font: 'Body Font', preset_none: '— No preference —',
         section_account: 'My Account', account_profile: 'Profile', account_banking: 'Banking',
         label_agent_code: 'Agent Code', hint_codename: 'Your clients enter this code when submitting from the demo.',
         label_bank_name: 'Bank Name', label_bank_number: 'Account Number',
@@ -510,6 +587,9 @@
         btn_confirm_lead: '\u78ba\u8a8d', btn_deny_lead: '\u62d2\u7d55',
         toast_lead_denied: '\u5df2\u62d2\u7d55\u6f5b\u5728\u5ba2\u6236\u3002', toast_lead_confirmed: '\u5df2\u78ba\u8a8d — \u8acb\u586b\u5beb\u8a73\u7d30\u8cc7\u6599\u3002',
         label_demo_data: '\u8a66\u7528\u8a2d\u5b9a\uff08\u5ba2\u6236\u81ea\u8a2d\uff09',
+        label_customization: '\u81ea\u8a02\u8a2d\u5b9a', customization_optional: '\uff08\u9078\u586b\uff09',
+        label_preset: '\u4e3b\u984c\u9810\u8a2d', label_bg_style: '\u80cc\u666f\u6a23\u5f0f',
+        label_heading_font: '\u6a19\u984c\u5b57\u578b', label_body_font: '\u5167\u6587\u5b57\u578b', preset_none: '\u2014 \u4e0d\u6307\u5b9a \u2014',
         section_account: '\u6211\u7684\u5e33\u6236', account_profile: '\u500b\u4eba\u8cc7\u6599', account_banking: '\u9280\u884c\u8cc7\u8a0a',
         label_agent_code: '\u4ee3\u7406\u4eba\u4ee3\u78bc', hint_codename: '\u5ba2\u6236\u5f9e\u8a66\u7528\u9801\u9762\u9001\u51fa\u6642\uff0c\u9700\u8f38\u5165\u6b64\u4ee3\u78bc\u3002',
         label_bank_name: '\u9280\u884c\u540d\u7a31', label_bank_number: '\u5e33\u6236\u865f\u78bc',
