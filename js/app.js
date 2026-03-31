@@ -18,6 +18,8 @@ function safeErr(error) {
 const SUPABASE_URL  = 'https://gfcncubcurtnzupycwnf.supabase.co';
 const SUPABASE_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdmY25jdWJjdXJ0bnp1cHljd25mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMzQ4MzYsImV4cCI6MjA4OTgxMDgzNn0.Hbuo8Zl1MNjq8bUlc7Ed_HSBmGQiNHc9wDqKd4XDdOE';
 const COMMISSION    = 0.15;
+const N8N_INVOICE_WEBHOOK = ''; // TODO: set invoice webhook URL
+const N8N_RECEIPT_WEBHOOK = ''; // TODO: set receipt webhook URL
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { storage: window.sessionStorage, persistSession: true } });
 // Warm up the Supabase connection immediately on page load so it's ready before the user clicks Sign In
@@ -46,7 +48,9 @@ function statusBadge(status) {
     cancelled: ['status-cancelled', pt('status_cancelled', 'Cancelled')],
     inactive: ['status-inactive', pt('status_inactive', 'Inactive')],
     possible_client: ['status-lead', pt('status_possible_client', 'Lead')],
-    denied: ['status-denied', pt('status_denied', 'Denied')]
+    denied: ['status-denied', pt('status_denied', 'Denied')],
+    completed: ['status-completed', pt('status_completed', 'Completed')],
+    paid: ['status-paid', pt('status_paid', 'Paid')]
   };
   const cfg = map[status] || ['status-hold', status || 'Unknown'];
   return '<span class="status-badge ' + cfg[0] + '">' + cfg[1] + '</span>';
@@ -286,8 +290,8 @@ function renderClients(clients) {
     const typeLabel = typeLabels[c.type] || escHtml(c.type) || '—';
     let adminCols = '';
     if (isAdmin) {
-      const statuses = ['hold', 'active', 'cancelled', 'inactive'];
-      const labels   = { hold: 'On Hold', active: 'Active', cancelled: 'Cancelled', inactive: 'Inactive' };
+      const statuses = ['hold', 'completed', 'paid', 'active', 'cancelled', 'inactive'];
+      const labels   = { hold: 'On Hold', completed: 'Completed', paid: 'Paid', active: 'Active', cancelled: 'Cancelled', inactive: 'Inactive' };
       const opts = statuses.map(s => '<option value="' + s + '"' + (c.status === s ? ' selected' : '') + '>' + labels[s] + '</option>').join('');
       const due = c.payment_deadline ? new Date(c.payment_deadline).toLocaleDateString() : (c.status === 'hold' ? '7 days from start' : '—');
       adminCols = '<td>' + due + '</td>'
@@ -333,7 +337,55 @@ async function updateClientStatus(id, status) {
   if (status === 'active') update.start_date = new Date().toISOString().split('T')[0];
   const { error } = await sb.from('clients').update(update).eq('id', id);
   if (error) { showToast('Error updating status.'); loadClients(); return; }
-  showToast(pt('toast_status', 'Status updated!')); renderStats([]); loadClients();
+
+  if (status === 'completed') {
+    // Mark linked invoice as sent and fire invoice webhook
+    const { data: inv } = await sb.from('invoices').select('*, clients(client_name, client_email, agents(full_name))').eq('client_id', id).order('created_at', { ascending: false }).limit(1).maybeSingle();
+    if (inv) {
+      await sb.from('invoices').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', inv.id);
+      if (N8N_INVOICE_WEBHOOK) {
+        fetch(N8N_INVOICE_WEBHOOK, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            event: 'invoice_send',
+            invoice_id: inv.id,
+            client_name: inv.clients?.client_name || '',
+            client_email: inv.clients?.client_email || '',
+            amount: inv.amount,
+            due_date: inv.due_date,
+            agent_name: inv.clients?.agents?.full_name || agentName,
+          })
+        }).catch(() => {});
+      }
+    }
+  }
+
+  if (status === 'paid') {
+    // Mark linked invoice as paid, fire receipt webhook, then auto-move to active
+    const { data: inv } = await sb.from('invoices').select('*, clients(client_name, client_email, agents(full_name))').eq('client_id', id).order('created_at', { ascending: false }).limit(1).maybeSingle();
+    if (inv) {
+      const paidAt = new Date().toISOString();
+      await sb.from('invoices').update({ status: 'paid', paid_at: paidAt }).eq('id', inv.id);
+      if (N8N_RECEIPT_WEBHOOK) {
+        fetch(N8N_RECEIPT_WEBHOOK, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            event: 'receipt_send',
+            invoice_id: inv.id,
+            client_name: inv.clients?.client_name || '',
+            client_email: inv.clients?.client_email || '',
+            amount: inv.amount,
+            paid_at: paidAt,
+            agent_name: inv.clients?.agents?.full_name || agentName,
+          })
+        }).catch(() => {});
+      }
+    }
+    // Auto-move to active
+    await sb.from('clients').update({ status: 'active', start_date: new Date().toISOString().split('T')[0] }).eq('id', id);
+  }
+
+  showToast(pt('toast_status', 'Status updated!')); renderStats([]); loadClients(); loadInvoices();
 }
 async function updateClientDesc(id, description) {
   const { error } = await sb.from('clients').update({ description }).eq('id', id);
@@ -341,32 +393,29 @@ async function updateClientDesc(id, description) {
 }
 async function loadInvoices() {
   const tbody = document.getElementById('invoices-tbody');
-  tbody.innerHTML = '<tr><td colspan="4" class="empty-row">' + pt('loading', 'Loading\u2026') + '</td></tr>';
-  let query = sb.from('invoices').select('*, clients(client_name)').eq('status', 'pending').order('due_date');
+  tbody.innerHTML = '<tr><td colspan="4" class="empty-row">' + pt('loading', 'Loading…') + '</td></tr>';
+  let query = sb.from('invoices').select('*, clients(client_name)').order('created_at', { ascending: false });
   if (!isAdmin) query = query.eq('agent_id', currentUser.id);
   const { data, error } = await query;
   if (error) { tbody.innerHTML = '<tr><td colspan="4" class="empty-row">' + pt('err_invoices', 'Error loading invoices.') + '</td></tr>'; return; }
   renderInvoices(data || []);
 }
+function invStatusBadge(s) {
+  if (s === 'paid') return '<span class="status-badge status-active">Paid</span>';
+  if (s === 'sent') return '<span class="status-badge status-completed">Sent</span>';
+  return '<span class="status-badge status-hold">Pending</span>';
+}
 function renderInvoices(invoices) {
   lastInvoices = invoices;
   const tbody = document.getElementById('invoices-tbody');
-  if (!invoices.length) { tbody.innerHTML = '<tr><td colspan="4" class="empty-row">' + pt('no_invoices', 'No pending invoices.') + '</td></tr>'; return; }
+  if (!invoices.length) { tbody.innerHTML = '<tr><td colspan="4" class="empty-row">' + pt('no_invoices', 'No invoices yet.') + '</td></tr>'; return; }
   const rows = invoices.map(inv => {
-    const amount = Number(inv.commission_amount) || 0;
+    const amount = Number(inv.amount) || 0;
     const due = inv.due_date ? new Date(inv.due_date).toLocaleDateString() : '—';
     const client = (inv.clients && inv.clients.client_name) || '—';
-    const payBtn = isAdmin ? '<button type="button" class="btn-pay" data-id="' + escAttr(inv.id) + '">' + pt('btn_mark_paid', 'Mark Paid') + '</button>' : '<span style="color:var(--text-muted);font-size:0.85rem">' + pt('btn_pending', 'Pending') + '</span>';
-    return '<tr><td>' + escHtml(client) + '</td><td>NT$' + amount.toLocaleString() + '</td><td>' + due + '</td><td>' + payBtn + '</td></tr>';
+    return '<tr><td>' + escHtml(client) + '</td><td>NT$' + amount.toLocaleString() + '</td><td>' + due + '</td><td>' + invStatusBadge(inv.status) + '</td></tr>';
   });
   tbody.innerHTML = rows.join('');
-  tbody.querySelectorAll('.btn-pay').forEach(btn => btn.addEventListener('click', () => markInvoicePaid(btn.dataset.id)));
-}
-async function markInvoicePaid(id) {
-  if (!isAdmin) return;
-  const { error } = await sb.from('invoices').update({ status: 'paid', paid_at: new Date().toISOString() }).eq('id', id);
-  if (error) { showToast('Error updating invoice.'); return; }
-  showToast(pt('toast_invoice', 'Invoice marked as paid!')); loadInvoices(); loadTotalEarned();
 }
 /* ── Language tag input ─────────────────────────────────────────────────── */
 const LANG_LIST = [
@@ -503,11 +552,25 @@ async function handleAddClient(e) {
   }
   if (error) { showMsg('add-client-error', safeErr(error)); }
   else {
+    // Auto-create a pending invoice for the new client
+    const { data: newClient } = leadId
+      ? await sb.from('clients').select('id').eq('id', leadId).maybeSingle()
+      : await sb.from('clients').select('id').eq('agent_id', currentUser.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
+    if (newClient) {
+      const dueDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      await sb.from('invoices').insert({
+        agent_id: currentUser.id,
+        client_id: newClient.id,
+        amount: clientData.monthly_fee,
+        commission_amount: clientData.monthly_fee * COMMISSION,
+        due_date: dueDate,
+        status: 'pending',
+      }).catch(() => {});
+    }
     closeModal(); e.target.reset(); resetLangTags();
-    // Reset customization section
     document.getElementById('btn-custom-toggle').setAttribute('aria-expanded', 'false');
     document.getElementById('custom-body').classList.add('hidden');
-    showToast(pt('toast_client', 'Client submitted for approval!')); loadClients(); loadLeads();
+    showToast(pt('toast_client', 'Client submitted for approval!')); loadClients(); loadLeads(); loadInvoices();
   }
   btn.disabled = false;
 }

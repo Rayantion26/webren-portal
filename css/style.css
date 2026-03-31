@@ -490,6 +490,8 @@ input, select, textarea, button { font-family: inherit; font-size: inherit; }
 .status-inactive  { background: rgba(148,163,184,0.1); color: #94A3B8;           border: 1px solid rgba(148,163,184,0.2); }
 .status-lead      { background: rgba(250,204,21,0.1);  color: #FDE68A;           border: 1px solid rgba(250,204,21,0.25); }
 .status-denied    { background: rgba(148,163,184,0.08); color: #64748B;          border: 1px solid rgba(148,163,184,0.15); }
+.status-completed { background: rgba(99,102,241,0.12);  color: #A5B4FC;           border: 1px solid rgba(99,102,241,0.25); }
+.status-paid      { background: rgba(234,179,8,0.12);   color: #FDE68A;           border: 1px solid rgba(234,179,8,0.25); }
 
 /* Admin table controls */
 .status-select {
