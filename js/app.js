@@ -23,7 +23,7 @@ const N8N_RECEIPT_WEBHOOK = ''; // TODO: set receipt webhook URL
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { storage: window.sessionStorage, persistSession: true } });
 // Warm up the Supabase connection immediately on page load so it's ready before the user clicks Sign In
-sb.from('allowed_emails').select('count', { count: 'exact', head: true }).then(() => {}).catch(() => {});
+sb.from('agents').select('count', { count: 'exact', head: true }).then(() => {}).catch(() => {});
 function pt(key, fallback) {
   const lang = localStorage.getItem('webren_lang') || 'en';
   const s = window.PORTAL_STRINGS && window.PORTAL_STRINGS[lang];
@@ -173,8 +173,8 @@ async function doSignUp() {
   const btn = document.getElementById('btn-register');
   btn.disabled = true;
   showMsg('reg-error', ''); showMsg('reg-success', '');
-  // Pre-check whitelist
-  const { data: allowed } = await sb.from('allowed_emails').select('email').eq('email', email).maybeSingle();
+  // Pre-check whitelist via security-definer RPC (anon cannot read allowed_emails table directly)
+  const { data: allowed } = await sb.rpc('is_email_allowed', { check_email: email });
   if (!allowed) {
     showMsg('reg-error', 'Your email is not on the access list. Please contact Aaron to get added.');
     btn.disabled = false; return;
