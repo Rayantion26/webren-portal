@@ -101,6 +101,25 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 });
+// Re-check session when page is restored from BFCache (browser back/forward)
+window.addEventListener('pageshow', async (event) => {
+  if (!event.persisted) return;
+  const { data: { session } } = await sb.auth.getSession();
+  if (session && session.user) {
+    if (!currentUser || currentUser.id !== session.user.id) {
+      currentUser = session.user;
+      document.getElementById('header-user').classList.remove('hidden');
+      await resolveAdmin();
+      loadDashboard();
+    }
+    showScreen('dashboard');
+  } else {
+    currentUser = null; isAdmin = false;
+    document.getElementById('header-user').classList.add('hidden');
+    showScreen('auth');
+  }
+});
+
 async function resolveAdmin() {
   const user = currentUser;
   if (!user) return;
