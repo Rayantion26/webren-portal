@@ -116,6 +116,7 @@ async function resolveAdmin() {
   document.getElementById('header-avatar-initials').textContent = initials;
   ['col-paydue', 'col-desc', 'col-approve'].forEach(id => document.getElementById(id).classList.toggle('hidden', !isAdmin));
   document.getElementById('allowed-emails-section').classList.toggle('hidden', !isAdmin);
+  document.getElementById('admin-withdrawals-section').classList.toggle('hidden', !isAdmin);
   if (isAdmin) {
     document.querySelector('[data-i18n="stat_monthly"]').textContent = 'Monthly Sales';
     document.querySelector('[data-i18n="stat_yearly"]').textContent  = 'Yearly Sales';
@@ -205,7 +206,7 @@ async function handleForgotPassword(e) {
 async function handleLogout() { await sb.auth.signOut(); }
 async function loadDashboard() {
   await Promise.all([loadClients(), loadLeads(), loadInvoices()]);
-  if (isAdmin) loadAllowedEmails();
+  if (isAdmin) { loadAllowedEmails(); loadAdminWithdrawals(); }
 }
 async function loadClients() {
   const tbody = document.getElementById('clients-tbody');
@@ -655,6 +656,103 @@ async function removeAllowedEmail(email) {
   if (error) { showToast('Error removing email.'); return; }
   showToast(pt('toast_email_removed', 'Email removed.')); loadAllowedEmails();
 }
+async function loadAdminWithdrawals() {
+  const tbody = document.getElementById('admin-withdrawals-tbody');
+  tbody.replaceChildren();
+  const tr0 = tbody.insertRow();
+  const td0 = tr0.insertCell();
+  td0.colSpan = 6; td0.className = 'empty-row'; td0.textContent = 'Loading\u2026';
+
+  const { data, error } = await sb
+    .from('withdrawals')
+    .select('*, agents(full_name)')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    tbody.replaceChildren();
+    const tr = tbody.insertRow(); const td = tr.insertCell();
+    td.colSpan = 6; td.className = 'empty-row'; td.textContent = 'Error loading withdrawals.';
+    return;
+  }
+  renderAdminWithdrawals(data || []);
+}
+
+function renderAdminWithdrawals(rows) {
+  const tbody = document.getElementById('admin-withdrawals-tbody');
+  tbody.replaceChildren();
+  if (!rows.length) {
+    const tr = tbody.insertRow(); const td = tr.insertCell();
+    td.colSpan = 6; td.className = 'empty-row'; td.textContent = 'No withdrawal requests yet.';
+    return;
+  }
+  const frag = document.createDocumentFragment();
+  rows.forEach(w => {
+    const tr = document.createElement('tr');
+
+    const tdAgent = tr.insertCell();
+    tdAgent.textContent = (w.agents && w.agents.full_name) || '\u2014';
+
+    const tdAmt = tr.insertCell();
+    tdAmt.textContent = 'NT$' + Number(w.amount).toLocaleString();
+
+    const tdDate = tr.insertCell();
+    tdDate.textContent = new Date(w.created_at).toLocaleDateString();
+
+    const tdStatus = tr.insertCell();
+    const badge = document.createElement('span');
+    badge.className = w.status === 'paid'
+      ? 'withdraw-status-paid'
+      : w.status === 'rejected'
+        ? 'withdraw-status-rejected'
+        : 'withdraw-status-pending';
+    badge.textContent = w.status.charAt(0).toUpperCase() + w.status.slice(1);
+    tdStatus.appendChild(badge);
+
+    const tdPaid = tr.insertCell();
+    tdPaid.textContent = w.paid_at ? new Date(w.paid_at).toLocaleDateString() : '\u2014';
+
+    const tdAct = tr.insertCell();
+    if (w.status === 'pending') {
+      const btnPay = document.createElement('button');
+      btnPay.type = 'button'; btnPay.className = 'btn-primary btn-sm';
+      btnPay.textContent = 'Mark Paid'; btnPay.style.marginRight = '6px';
+      btnPay.addEventListener('click', () => approveWithdrawal(w.id));
+
+      const btnReject = document.createElement('button');
+      btnReject.type = 'button'; btnReject.className = 'btn-remove-email';
+      btnReject.textContent = 'Reject';
+      btnReject.addEventListener('click', () => rejectWithdrawal(w.id));
+
+      tdAct.appendChild(btnPay);
+      tdAct.appendChild(btnReject);
+    } else {
+      tdAct.textContent = '\u2014';
+    }
+    frag.appendChild(tr);
+  });
+  tbody.replaceChildren(frag);
+}
+
+async function approveWithdrawal(id) {
+  const { error } = await sb
+    .from('withdrawals')
+    .update({ status: 'paid', paid_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) { showToast('Error updating withdrawal.'); return; }
+  showToast('Withdrawal marked as paid!');
+  loadAdminWithdrawals();
+}
+
+async function rejectWithdrawal(id) {
+  const { error } = await sb
+    .from('withdrawals')
+    .update({ status: 'rejected' })
+    .eq('id', id);
+  if (error) { showToast('Error rejecting withdrawal.'); return; }
+  showToast('Withdrawal rejected.');
+  loadAdminWithdrawals();
+}
+
 async function toggleAEFlag(email, field, val) {
   const upd = {}; upd[field] = val;
   const { error } = await sb.from('allowed_emails').update(upd).eq('email', email);
@@ -695,6 +793,7 @@ document.addEventListener('portal:lang', () => {
   applyFilters();
   renderInvoices(lastInvoices);
   if (currentUser && isAdmin) loadAllowedEmails();
+  if (currentUser && isAdmin) loadAdminWithdrawals();
 });
 
 // ── Account section ───────────────────────────────────────────────────────────

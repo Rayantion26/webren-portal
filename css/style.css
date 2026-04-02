@@ -843,3 +843,8 @@ footer {
 .tnc-check-label.enabled { color: var(--text); cursor: pointer; }
 .tnc-check-label input { accent-color: var(--teal); margin-top: 3px; flex-shrink: 0; }
 #tnc-confirm:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ── Withdrawal status badges ─────────────────────────────────────────────── */
+.withdraw-status-pending  { color: #F59E0B; font-weight: 600; }
+.withdraw-status-paid     { color: var(--green); font-weight: 600; }
+.withdraw-status-rejected { color: var(--red); font-weight: 600; }
