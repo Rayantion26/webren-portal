@@ -101,23 +101,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 });
-// Re-check session when page is restored from BFCache (browser back/forward)
-window.addEventListener('pageshow', async (event) => {
-  if (!event.persisted) return;
-  const { data: { session } } = await sb.auth.getSession();
-  if (session && session.user) {
-    if (!currentUser || currentUser.id !== session.user.id) {
-      currentUser = session.user;
-      document.getElementById('header-user').classList.remove('hidden');
-      await resolveAdmin();
-      loadDashboard();
-    }
-    showScreen('dashboard');
-  } else {
-    currentUser = null; isAdmin = false;
-    document.getElementById('header-user').classList.add('hidden');
-    showScreen('auth');
-  }
+// Force fresh reload when page is restored from BFCache (browser back/forward)
+// BFCache restores stale Supabase client with frozen fetch connections,
+// causing queries to hang. A reload ensures a clean client and fresh data.
+window.addEventListener('pageshow', (event) => {
+  if (event.persisted) window.location.reload();
 });
 
 async function resolveAdmin() {
